@@ -9,8 +9,11 @@ THEMES = ["night", "day", "deepblue"]
 THEME_LABELS = {"night": "夜间", "day": "日间", "deepblue": "深蓝"}
 
 
-def apply_theme(app: QApplication, name: str):
+def apply_theme(name: str):
     """切换主题"""
+    app = QApplication.instance()
+    if not app or not isinstance(app, QApplication):
+        return
     qss = _QSS_TABLE.get(name)
     if qss:
         app.setStyleSheet(qss)

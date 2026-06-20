@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 三主题系统
+#260620 Red&小宋 RedGarph V0.0.1 — 三主题系统
 
 from PyQt6.QtGui import QPalette, QColor
 from PyQt6.QtWidgets import QApplication

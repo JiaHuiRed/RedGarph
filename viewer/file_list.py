@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 目录扫描与文件导航
+#260620 Red&小宋 RedGarph V0.0.1 — 目录扫描与文件导航
 
 import os
 import re

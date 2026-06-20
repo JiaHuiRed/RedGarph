@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 主窗口（左侧缩略图 + 右侧大图）
+#260620 Red&小宋 RedGarph V0.0.1 — 主窗口（左侧缩略图 + 右侧大图）
 
 from pathlib import Path
 

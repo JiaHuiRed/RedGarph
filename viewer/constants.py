@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 配置常量
+#260620 Red&小宋 RedGarph V0.0.1 — 配置常量
 
 # ── 支持图片格式 ──
 IMAGE_EXTENSIONS = {
@@ -26,5 +26,5 @@ WINDOW_HEIGHT = 800
 
 # ── 应用信息 ──
 APP_NAME = "RedGarph"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.0.1"
 ORG_NAME = "RedStudio"

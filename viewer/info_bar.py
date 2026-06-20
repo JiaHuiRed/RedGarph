@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 图片信息浮层
+#260620 Red&小宋 RedGarph V0.0.1 — 图片信息浮层
 
 import os
 from pathlib import Path

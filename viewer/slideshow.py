@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 幻灯片播放
+#260620 Red&小宋 RedGarph V0.0.1 — 幻灯片播放
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 

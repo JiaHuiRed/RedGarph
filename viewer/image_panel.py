@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.1.0 — 图片渲染与交互
+#260620 Red&小宋 RedGarph V0.0.1 — 图片渲染与交互
 
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import (

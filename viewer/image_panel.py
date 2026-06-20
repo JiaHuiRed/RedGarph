@@ -66,7 +66,7 @@ class ImagePanel(QGraphicsView):
         # ── 裁剪模式 ──
         self._crop_mode = False
         self._crop_origin: QPoint | None = None
-        self._crop_rubber = QRubberBand(QRubberBand.Rectangle, self)
+        self._crop_rubber = QRubberBand(QRubberBand.Shape.Rectangle, self)
         self._crop_rubber.hide()
 
     # ── 图片加载 ──

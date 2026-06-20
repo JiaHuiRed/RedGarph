@@ -3,7 +3,7 @@
 > **macOS 风格本地图片查看器。** 左侧缩略图面板 + 缩放/旋转/全屏。
 > _A macOS-style local image viewer with left thumbnail panel, zoom, rotate, and fullscreen._
 
-[![版本](https://badgen.net/badge/版本/0.0.2/blue)](CHANGELOG.md)
+[![版本](https://badgen.net/badge/版本/0.0.3/blue)](CHANGELOG.md)
 [![平台](https://badgen.net/badge/平台/Windows/lightgrey)]()
 [![Tech](https://badgen.net/badge/Tech/PyQt6/orange)]()
 

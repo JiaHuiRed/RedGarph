@@ -13,7 +13,7 @@ if %errorlevel% neq 0 (
     pip install pyinstaller
 )
 
-echo Building RedGarph V0.0.2...
+echo Building RedGarph V0.0.3...
 pyinstaller --onefile --windowed --name "RedGarph" --icon resources\icon.ico --clean --noconfirm main.py
 
 if %errorlevel% equ 0 (

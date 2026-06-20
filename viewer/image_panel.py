@@ -176,9 +176,9 @@ class ImagePanel(QGraphicsView):
         self._zoom_label.setVisible(True)
         self._zoom_label.adjustSize()
         # 定位到右下角
-        ml, mt, mr, mb = self._zoom_label.getContentsMargins()
-        lw = self._zoom_label.width() + ml + mr + 10
-        lh = self._zoom_label.height() + mt + mb + 6
+        margins = self._zoom_label.contentsMargins()
+        lw = self._zoom_label.width() + margins.left() + margins.right() + 10
+        lh = self._zoom_label.height() + margins.top() + margins.bottom() + 6
         self._zoom_label.move(
             self.width() - lw - 8,
             self.height() - lh - 8,

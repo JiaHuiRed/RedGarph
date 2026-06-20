@@ -1,5 +1,17 @@
 # RedGarph 更新日志
 
+## 0.0.3（2026-06-20）
+
+### 🐛 Bug 修复
+
+- `QRubberBand.Shape.Rectangle` — 修复 PyQt6 枚举命名空间兼容性（裁剪模式初始化崩溃）
+- `contentsMargins()` — 修复 `QLabel` 无 `getContentsMargins` 方法（缩放指示器崩溃）
+
+### 技术细节
+
+- `main.py` 增加崩溃日志（`crash.log`）+ Qt 消息处理器
+- 新增 `build_debug.bat`（带控制台的调试版 exe）
+
 ## 0.0.2（2026-06-20）
 
 ### ✨ 新功能

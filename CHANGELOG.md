@@ -1,5 +1,24 @@
 # RedGarph 更新日志
 
+## 0.0.2（2026-06-20）
+
+### ✨ 新功能
+
+- **缩放比例指示器** — 右下角实时显示缩放百分比（适应窗口/150%/…）
+- **EXIF 信息面板** — 右侧面板（Ctrl+E），显示相机型号、光圈、快门、ISO、焦距等元数据
+- **图片裁剪** — Ctrl+Shift+C 进入裁剪模式，拖动选择区域，Enter 确认，Esc 取消
+
+### 🐛 Bug 修复
+
+- `run.bat` 启动脚本优化 — 优先运行编译版 exe，不存在则走源码
+
+### 技术细节
+
+- 新增 `viewer/exif_panel.py`，基于 Pillow 读取 EXIF
+- `ImagePanel` 增加缩放指示器 QLabel 叠加层 + 裁剪模式（QRubberBand）
+- `build.bat` 一键打包脚本，`--icon resources\icon.ico`
+- macOS Big Sur 风格应用图标（暖红橙渐变 + 山景剪影）
+
 ## 0.0.1（2026-06-20）
 
 ### ✨ 新功能

@@ -13,11 +13,16 @@ if %errorlevel% neq 0 (
     pip install PyQt6
 )
 
-echo Starting RedGarph...
-python main.py
-if errorlevel 1 (
-    echo.
-    echo Launch failed (error code %errorlevel%^)
-    pause
-    exit /b %errorlevel%
+if exist "%~dp0dist\RedGarph.exe" (
+    echo Starting RedGarph (compiled)...
+    start "" "%~dp0dist\RedGarph.exe"
+) else (
+    echo Starting RedGarph (source)...
+    python main.py
+    if errorlevel 1 (
+        echo.
+        echo Launch failed (error code %errorlevel%^)
+        pause
+        exit /b %errorlevel%
+    )
 )

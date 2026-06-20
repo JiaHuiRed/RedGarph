@@ -23,6 +23,7 @@ from .thumb_bar import ThumbBar
 from .info_bar import InfoBar
 from .file_list import FileList
 from .slideshow import Slideshow
+from .exif_panel import ExifPanel
 
 RESIZE_MARGIN = 6
 TITLEBAR_HEIGHT = 34
@@ -168,6 +169,7 @@ class MainWindow(QMainWindow):
         self.image_panel = ImagePanel()
         self.thumb_bar = ThumbBar()
         self.info_bar = InfoBar()
+        self.exif_panel = ExifPanel()
 
         # 缩略图面板默认可见
         self._thumb_visible = True
@@ -219,12 +221,28 @@ class MainWindow(QMainWindow):
         self._act_thumb.triggered.connect(self._toggle_thumb_panel)
         menu.addAction(self._act_thumb)
 
+        # EXIF 信息面板
+        self._act_exif = QAction("EXIF 信息", self)
+        self._act_exif.setShortcut("Ctrl+E")
+        self._act_exif.setCheckable(True)
+        self._act_exif.triggered.connect(self._toggle_exif)
+        menu.addAction(self._act_exif)
+
         # 显示信息
         self._act_info = QAction("显示信息", self)
         self._act_info.setShortcut("I")
         self._act_info.setCheckable(True)
         self._act_info.triggered.connect(self._toggle_info)
         menu.addAction(self._act_info)
+
+        menu.addSeparator()
+
+        # 裁剪模式
+        self._act_crop = QAction("裁剪模式", self)
+        self._act_crop.setShortcut("Ctrl+Shift+C")
+        self._act_crop.setCheckable(True)
+        self._act_crop.triggered.connect(self._toggle_crop)
+        menu.addAction(self._act_crop)
 
         menu.addSeparator()
 
@@ -277,10 +295,7 @@ class MainWindow(QMainWindow):
         splitter.setHandleWidth(1)
         splitter.setChildrenCollapsible(False)
 
-        # 左：缩略图面板
-        splitter.addWidget(self.thumb_bar)
-
-        # 右：图片区域
+        # 左：缩略图面板 | 中：图片区域 | 右：EXIF 面板
         image_area = QWidget()
         image_area.setObjectName("ImageArea")
         image_layout = QVBoxLayout(image_area)
@@ -291,12 +306,19 @@ class MainWindow(QMainWindow):
         # 信息栏覆盖在图片区域底部
         self.info_bar.setParent(self.image_panel)
 
+        splitter.addWidget(self.thumb_bar)
         splitter.addWidget(image_area)
+        splitter.addWidget(self.exif_panel)
 
         # 设置初始分割比例
-        splitter.setSizes([THUMB_PANEL_WIDTH, WINDOW_WIDTH - THUMB_PANEL_WIDTH])
+        splitter.setSizes([
+            THUMB_PANEL_WIDTH,
+            WINDOW_WIDTH - THUMB_PANEL_WIDTH - ExifPanel.PANEL_WIDTH,
+            ExifPanel.PANEL_WIDTH,
+        ])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
+        splitter.setCollapsible(2, False)
 
         root.addWidget(splitter, 1)
 
@@ -373,6 +395,10 @@ class MainWindow(QMainWindow):
         self.info_bar.show_page(self.file_list.index, self.file_list.count)
         self._position_info_bar()
 
+        # 更新 EXIF 面板（如果可见）
+        if self.exif_panel.isVisible():
+            self.exif_panel.set_image(str(path))
+
     def _on_index_changed(self, index: int):
         if index >= 0:
             self._load_current()
@@ -399,6 +425,25 @@ class MainWindow(QMainWindow):
             self.file_list.next_image()
         else:
             self.file_list.go_to(0)
+
+    # ── EXIF 面板 ──
+
+    def _toggle_exif(self):
+        self.exif_panel.toggle()
+        self._act_exif.setChecked(self.exif_panel.isVisible())
+        # 切换时刷新当前图片的 EXIF
+        if self.exif_panel.isVisible() and self._current_path:
+            self.exif_panel.set_image(str(self._current_path))
+
+    # ── 裁剪模式 ──
+
+    def _toggle_crop(self):
+        if self.image_panel.is_crop_mode:
+            self.image_panel.exit_crop_mode(apply=False)
+            self._act_crop.setChecked(False)
+        else:
+            self.image_panel.enter_crop_mode()
+            self._act_crop.setChecked(True)
 
     # ── 信息栏 ──
 
@@ -565,9 +610,12 @@ class MainWindow(QMainWindow):
         # Space 幻灯播放
         elif key == Qt.Key.Key_Space:
             self._toggle_slideshow()
-        # Esc 退出幻灯片/全屏
+        # Esc 退出裁剪 / 幻灯片 / 全屏
         elif key == Qt.Key.Key_Escape:
-            if self.isFullScreen():
+            if self.image_panel.is_crop_mode:
+                self.image_panel.cancel_crop()
+                self._act_crop.setChecked(False)
+            elif self.isFullScreen():
                 self.showNormal()
                 self.titlebar.setVisible(True)
                 self.thumb_bar.setVisible(self._thumb_visible)
@@ -613,6 +661,21 @@ class MainWindow(QMainWindow):
         # - 缩小
         elif key == Qt.Key.Key_Minus:
             self.image_panel.zoom_out()
+        # Ctrl+E EXIF 面板
+        elif key == Qt.Key.Key_E and mod == Qt.KeyboardModifier.ControlModifier:
+            self._toggle_exif()
+        # Ctrl+Shift+C 裁剪模式
+        elif key == Qt.Key.Key_C and mod == (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+        ):
+            self._toggle_crop()
+        # Enter 确认裁剪
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self.image_panel.is_crop_mode:
+                self.image_panel.apply_crop()
+                self._act_crop.setChecked(False)
+            else:
+                super().keyPressEvent(event)
         else:
             super().keyPressEvent(event)
 

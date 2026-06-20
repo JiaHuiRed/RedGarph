@@ -1,5 +1,5 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.0.1 — 图片查看器入口
+#260620 Red&小宋 RedGarph V0.0.2 — 图片查看器入口
 
 import sys
 from pathlib import Path

@@ -1,8 +1,10 @@
-__pycache__/
+___pycache__/
 *.pyc
 *.pyo
 *.egg-info/
 dist/
 build/
+*.spec
+*.log
 .DS_Store
 Thumbs.db

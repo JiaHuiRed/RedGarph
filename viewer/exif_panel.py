@@ -3,6 +3,7 @@
 
 """右侧 EXIF 信息面板 — 读取并展示图片 EXIF 元数据"""
 
+from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -14,6 +15,15 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
     QLabel, QHeaderView,
 )
+
+
+def _format_size(n: int) -> str:
+    """人性化文件大小"""
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
+        n /= 1024
+    return f"{n:.1f} TB"
 
 # ── 枚举映射 ──
 _METERING_MODES = {0: "未知", 1: "平均", 2: "中央重点", 3: "点测光", 4: "多点", 5: "矩阵", 6: "局部"}
@@ -56,8 +66,10 @@ def _format_enum(v):
     return _ENUM_VALS.get(int(v), str(v))
 
 
+from collections.abc import Callable
+
 # ── 需要展示的 EXIF 字段（tag_id → (标签名, 格式化函数)） ──
-_EXIF_FIELDS: dict[int, tuple[str, callable]] = {
+_EXIF_FIELDS: dict[int, tuple[str, Callable]] = {
     271: ("相机品牌", str),
     272: ("相机型号", str),
     305: ("软件", str),
@@ -97,15 +109,15 @@ class ExifPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("exifPanel")
-        self.setFixedWidth(self.PANEL_WIDTH)
-        self.setVisible(False)
+        self.setMinimumWidth(180)
+        self.setVisible(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
         # ── 标题 ──
-        title = QLabel("EXIF 信息")
+        title = QLabel("信息")
         title.setObjectName("exifTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFixedHeight(32)
@@ -129,50 +141,76 @@ class ExifPanel(QWidget):
         layout.addWidget(self._tree, 1)
 
     def set_image(self, path: str | Path):
-        """加载图片的 EXIF 数据"""
+        """加载图片基本信息 + EXIF 附加信息"""
         self._tree.clear()
+        fp = Path(path)
+
         try:
-            img = Image.open(str(path))
-            raw = img._getexif()
-            if raw is None:
-                self._show_empty("无 EXIF 数据")
-                return
+            # ── 基本信息（总是有） ──
+            items: list[QTreeWidgetItem] = []
+            items.append(QTreeWidgetItem(["文件名", fp.name]))
+            items.append(QTreeWidgetItem([
+                "大小", _format_size(fp.stat().st_size),
+            ]))
+            items.append(QTreeWidgetItem([
+                "修改时间",
+                datetime.fromtimestamp(fp.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+            ]))
 
-            items = []
-            for tag_id, (label, fmt) in _EXIF_FIELDS.items():
-                raw_val = raw.get(tag_id)
-                if raw_val is None:
-                    continue
-                try:
-                    val_str = fmt(raw_val)
-                except Exception:
-                    val_str = str(raw_val)
-                item = QTreeWidgetItem([label, val_str])
-                item.setToolTip(1, val_str)
-                items.append(item)
-
-            if not items:
-                self._show_empty("无可用 EXIF 信息")
-                return
+            # 尝试获取图片尺寸（不依赖 EXIF）
+            img = None
+            try:
+                img = Image.open(str(fp))
+                w, h = img.size
+                items.append(QTreeWidgetItem(["尺寸", f"{w} × {h} px"]))
+            except Exception:
+                items.append(QTreeWidgetItem(["尺寸", "无法读取"]))
 
             self._tree.addTopLevelItems(items)
 
-            # 额外未映射的原始标签
-            mapped_ids = set(_EXIF_FIELDS.keys())
-            extras = []
-            for tag_id, raw_val in raw.items():
-                if tag_id in mapped_ids or tag_id == 0:
-                    continue
-                name = EXIF_TAGS.get(tag_id, f"0x{tag_id:04X}")
-                extras.append(QTreeWidgetItem([name, str(raw_val)[:60]]))
-            if extras:
-                sep = QTreeWidgetItem(["─── 其他 ───", ""])
-                sep.setFlags(sep.flags() & ~Qt.ItemFlag.ItemIsSelectable)
-                self._tree.addTopLevelItem(sep)
-                self._tree.addTopLevelItems(extras[:20])
+            # ── EXIF 附加信息 ──
+            raw = None
+            if img is not None:
+                try:
+                    raw = img._getexif()
+                except Exception:
+                    pass
+
+            if raw:
+                exif_items = []
+                for tag_id, (label, fmt) in _EXIF_FIELDS.items():
+                    raw_val = raw.get(tag_id)
+                    if raw_val is None:
+                        continue
+                    try:
+                        val_str = fmt(raw_val)
+                    except Exception:
+                        val_str = str(raw_val)
+                    item = QTreeWidgetItem([label, val_str])
+                    item.setToolTip(1, val_str)
+                    exif_items.append(item)
+
+                if exif_items:
+                    sep = QTreeWidgetItem(["─── EXIF ───", ""])
+                    sep.setFlags(
+                        sep.flags() & ~Qt.ItemFlag.ItemIsSelectable
+                    )
+                    self._tree.addTopLevelItem(sep)
+                    self._tree.addTopLevelItems(exif_items)
+
+                    # 额外未映射的原始标签
+                    mapped_ids = set(_EXIF_FIELDS.keys())
+                    extras = []
+                    for tag_id, raw_val in raw.items():
+                        if tag_id in mapped_ids or tag_id == 0:
+                            continue
+                        name = EXIF_TAGS.get(tag_id, f"0x{tag_id:04X}")
+                        extras.append(QTreeWidgetItem([name, str(raw_val)[:60]]))
+                    if extras:
+                        self._tree.addTopLevelItems(extras[:20])
 
         except Exception:
-            self._show_empty("无法读取 EXIF")
+            self._show_empty("无法读取")
 
     def clear_exif(self):
         self._tree.clear()

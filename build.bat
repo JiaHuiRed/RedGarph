@@ -13,7 +13,7 @@ if %errorlevel% neq 0 (
     pip install pyinstaller
 )
 
-echo Building RedGarph V0.0.3...
+echo Building RedGarph V0.0.4...
 pyinstaller --onefile --windowed --name "RedGarph" --icon resources\icon.ico --clean --noconfirm main.py
 
 if %errorlevel% equ 0 (
@@ -21,6 +21,7 @@ if %errorlevel% equ 0 (
     echo Build OK -- dist/RedGarph.exe
     rmdir /s /q build >nul 2>&1
     del RedGarph.spec >nul 2>&1
+    pause
 ) else (
     echo.
     echo Build failed.

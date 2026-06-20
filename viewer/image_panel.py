@@ -17,8 +17,6 @@ from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
 class ImagePanel(QGraphicsView):
     """图片显示区域：缩放、拖拽、旋转、裁剪、适应窗口"""
 
-    zoomChanged = None  # 占位，供 window.py 绑定
-
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -68,6 +66,23 @@ class ImagePanel(QGraphicsView):
         self._crop_origin: QPoint | None = None
         self._crop_rubber = QRubberBand(QRubberBand.Shape.Rectangle, self)
         self._crop_rubber.hide()
+        self._crop_rubber.setStyleSheet(
+            "QRubberBand { border: 2px solid #4FC3F7; "
+            "background: rgba(79, 195, 247, 0.08); }"
+        )
+
+        # ── 裁剪操作提示 ──
+        self._crop_hint = QLabel(self)
+        self._crop_hint.setObjectName("cropHint")
+        self._crop_hint.setText("点击拖拽选区 · Enter 确认 · Esc 取消")
+        self._crop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._crop_hint.setStyleSheet(
+            "QLabel { color: #B0BEC5; font: 13px; "
+            "background: rgba(0,0,0,0.55); padding: 6px 18px; "
+            "border-radius: 4px; }"
+        )
+        self._crop_hint.adjustSize()
+        self._crop_hint.hide()
 
     # ── 图片加载 ──
 
@@ -136,7 +151,19 @@ class ImagePanel(QGraphicsView):
         self._rotation = (self._rotation - 90) % 360
         self._refresh()
 
+    @property
+    def source(self) -> QPixmap:
+        """原始图片（未旋转）"""
+        return self._source
+
     # ── 内部刷新 ──
+
+    def _get_rotated_display(self) -> QPixmap:
+        """返回旋转后的显示用图片"""
+        if self._rotation:
+            t = QTransform().rotate(self._rotation)
+            return self._source.transformed(t, Qt.TransformationMode.SmoothTransformation)
+        return self._source
 
     def _refresh(self):
         """根据 _source / _rotation / _zoom 重建显示"""
@@ -144,12 +171,7 @@ class ImagePanel(QGraphicsView):
             self._zoom_label.setVisible(False)
             return
 
-        # 应用旋转到原始图片
-        if self._rotation:
-            t = QTransform().rotate(self._rotation)
-            display = self._source.transformed(t, Qt.TransformationMode.SmoothTransformation)
-        else:
-            display = self._source
+        display = self._get_rotated_display()
         self._item.setPixmap(display)
 
         # 应用缩放
@@ -186,7 +208,15 @@ class ImagePanel(QGraphicsView):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        # 适应窗口模式下重新适配
+        if self._zoom is None and not self._source.isNull():
+            self._scene.setSceneRect(self._item.boundingRect())
+            self.fitInView(self._item, Qt.AspectRatioMode.KeepAspectRatio)
         self._update_zoom_label()
+        # 裁剪模式下重定位提示
+        if self._crop_mode and self._crop_hint.isVisible():
+            cx = (self.width() - self._crop_hint.width()) // 2
+            self._crop_hint.move(cx, 20)
 
     # ── 鼠标滚轮缩放 ──
 
@@ -235,7 +265,11 @@ class ImagePanel(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
         self._crop_origin = None
         self._crop_rubber.hide()
-        self.setInteractive(True)
+        # 提示居中显示
+        self._crop_hint.adjustSize()
+        cx = (self.width() - self._crop_hint.width()) // 2
+        self._crop_hint.move(cx, 20)
+        self._crop_hint.show()
 
     def exit_crop_mode(self, apply: bool = False):
         """退出裁剪模式"""
@@ -243,6 +277,7 @@ class ImagePanel(QGraphicsView):
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self._crop_rubber.hide()
+        self._crop_hint.hide()
         self._crop_origin = None
         if apply and not self._source.isNull():
             rect = self._crop_rubber.geometry()
@@ -271,13 +306,7 @@ class ImagePanel(QGraphicsView):
         ).normalized()
 
         # 裁剪当前显示的图片（已旋转）
-        if self._rotation:
-            t = QTransform().rotate(self._rotation)
-            display = self._source.transformed(
-                t, Qt.TransformationMode.SmoothTransformation
-            )
-        else:
-            display = self._source
+        display = self._get_rotated_display()
 
         # 边界保护
         if display.isNull():

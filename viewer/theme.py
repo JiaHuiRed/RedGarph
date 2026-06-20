@@ -218,7 +218,7 @@ QMessageBox QPushButton:hover { background-color: #5dade2; border-color: #5dade2
 """
 
 
-def _make_palette(dark: bool, accent=None):
+def _make_palette(dark: bool):
     """创建 QPalette 辅助"""
     p = QPalette()
     if dark:

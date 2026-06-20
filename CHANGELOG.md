@@ -1,5 +1,29 @@
 # RedGarph 更新日志
 
+## 0.0.4（2026-06-20）
+
+### ✨ 新功能
+
+- **信息面板升级** — 默认显示文件名/大小/修改时间/图片尺寸（所有图片都有），EXIF 相机数据折叠到"─── EXIF ───"段作为附加信息（`exif_panel.py`）
+- **裁剪模式提示** — 进入裁剪模式后顶部显示「点击拖拽选区 · Enter 确认 · Esc 取消」操作提示，蓝色醒目选框（`image_panel.py`）
+
+### 🐛 Bug 修复
+
+- **无框窗口无法拖拽缩放** — 改用 `nativeEvent` + `WM_NCHITTEST` 处理边缘缩放，替代失效的 `mousePressEvent` 方案（`window.py`）
+- **缩减的缩略图面板** — 整体移除侧边栏缩略图功能（`thumb_bar.py` 删除，所有引用清理）
+
+### ⚡ 优化
+
+- **构建脚本** — `build.bat` 成功路径末尾加 `pause`，避免编译完成窗口闪退
+
+### 💎 代码质量
+
+- 旋转逻辑提取 `_get_rotated_display()` 消除 `_do_crop` 中的重复
+- `_source` 添加 `source` property，外部不再直接访问私有属性
+- 移除 `zoomChanged` 死变量、`_make_palette` 未用参数、`setSpacing` 重复调用
+
+---
+
 ## 0.0.3（2026-06-20）
 
 ### 🐛 Bug 修复

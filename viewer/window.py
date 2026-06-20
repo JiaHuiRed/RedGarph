@@ -1,6 +1,7 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.0.1 — 主窗口（左侧缩略图 + 右侧大图）
+#260620 Red&小宋 RedGarph V0.0.1 — 主窗口（图片 + EXIF 信息面板）
 
+import ctypes
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
@@ -15,11 +16,10 @@ from PyQt6.QtWidgets import (
 )
 
 from .constants import (
-    APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT, THUMB_PANEL_WIDTH,
+    APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT,
 )
 from .theme import apply_theme, THEMES, THEME_LABELS
 from .image_panel import ImagePanel
-from .thumb_bar import ThumbBar
 from .info_bar import InfoBar
 from .file_list import FileList
 from .slideshow import Slideshow
@@ -140,7 +140,7 @@ class TitleBar(QWidget):
 # ═══════════════════════════════════════════
 
 class MainWindow(QMainWindow):
-    """图片查看器：无框窗口 + 左侧缩略图面板 + 右侧大图"""
+    """图片查看器：无框窗口 + 图片区域 + EXIF 信息面板"""
 
     def __init__(self, theme: str = "night"):
         super().__init__()
@@ -167,12 +167,8 @@ class MainWindow(QMainWindow):
         self.file_list = FileList(self)
         self.slideshow = Slideshow(self)
         self.image_panel = ImagePanel()
-        self.thumb_bar = ThumbBar()
         self.info_bar = InfoBar()
         self.exif_panel = ExifPanel()
-
-        # 缩略图面板默认可见
-        self._thumb_visible = True
 
         self._build_titlebar()
         self._build_ui()
@@ -212,14 +208,6 @@ class MainWindow(QMainWindow):
         menu.addAction(self._act_slideshow)
 
         menu.addSeparator()
-
-        # 缩略图面板
-        self._act_thumb = QAction("缩略图面板", self)
-        self._act_thumb.setShortcut("Ctrl+B")
-        self._act_thumb.setCheckable(True)
-        self._act_thumb.setChecked(True)
-        self._act_thumb.triggered.connect(self._toggle_thumb_panel)
-        menu.addAction(self._act_thumb)
 
         # EXIF 信息面板
         self._act_exif = QAction("EXIF 信息", self)
@@ -289,13 +277,13 @@ class MainWindow(QMainWindow):
 
         root.addWidget(self.titlebar)
 
-        # ── 水平分割 ──
+        # ── 水平分割：图片区域 | EXIF 面板 ──
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setObjectName("MainSplitter")
         splitter.setHandleWidth(1)
         splitter.setChildrenCollapsible(False)
 
-        # 左：缩略图面板 | 中：图片区域 | 右：EXIF 面板
+        # 图片区域
         image_area = QWidget()
         image_area.setObjectName("ImageArea")
         image_layout = QVBoxLayout(image_area)
@@ -306,19 +294,15 @@ class MainWindow(QMainWindow):
         # 信息栏覆盖在图片区域底部
         self.info_bar.setParent(self.image_panel)
 
-        splitter.addWidget(self.thumb_bar)
         splitter.addWidget(image_area)
         splitter.addWidget(self.exif_panel)
 
-        # 设置初始分割比例
         splitter.setSizes([
-            THUMB_PANEL_WIDTH,
-            WINDOW_WIDTH - THUMB_PANEL_WIDTH - ExifPanel.PANEL_WIDTH,
+            WINDOW_WIDTH - ExifPanel.PANEL_WIDTH,
             ExifPanel.PANEL_WIDTH,
         ])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
-        splitter.setCollapsible(2, False)
 
         root.addWidget(splitter, 1)
 
@@ -326,7 +310,6 @@ class MainWindow(QMainWindow):
         """连接组件信号"""
         self.file_list.currentChanged.connect(self._on_index_changed)
         self.file_list.filesChanged.connect(self._on_files_changed)
-        self.thumb_bar.thumbnailClicked.connect(self.file_list.go_to)
         self.slideshow.nextRequested.connect(self._slideshow_next)
 
     # ── 文件操作 ──
@@ -371,12 +354,8 @@ class MainWindow(QMainWindow):
         idx = self.file_list.index
 
         if files and idx >= 0:
-            self.thumb_bar.set_files(files, idx)
-            self.thumb_bar.setVisible(self._thumb_visible)
-            self._act_thumb.setChecked(self._thumb_visible)
             self._load_current()
         else:
-            self.thumb_bar.clear()
             self.image_panel.load_image("")
             self._current_path = None
             self.titlebar.set_title("RedGarph")
@@ -391,7 +370,7 @@ class MainWindow(QMainWindow):
         self.titlebar.set_title(f"RedGarph — {path.name}")
 
         # 更新信息栏
-        self.info_bar.show_info(path, self.image_panel._source)
+        self.info_bar.show_info(path, self.image_panel.source)
         self.info_bar.show_page(self.file_list.index, self.file_list.count)
         self._position_info_bar()
 
@@ -402,17 +381,9 @@ class MainWindow(QMainWindow):
     def _on_index_changed(self, index: int):
         if index >= 0:
             self._load_current()
-            self.thumb_bar.set_current(index)
 
     def _on_files_changed(self):
         self._update_ui()
-
-    # ── 缩略图面板 ──
-
-    def _toggle_thumb_panel(self):
-        self._thumb_visible = not self._thumb_visible
-        self.thumb_bar.setVisible(self._thumb_visible)
-        self._act_thumb.setChecked(self._thumb_visible)
 
     # ── 幻灯片 ──
 
@@ -480,7 +451,7 @@ class MainWindow(QMainWindow):
             f"<b>RedGarph</b> V{APP_VERSION}<br><br>"
             "本地图片查看器<br>"
             "PyQt6 驱动 · macOS 风格界面<br>"
-            "左侧缩略图面板 · 缩放/旋转/全屏<br><br>"
+            "缩放/旋转/裁剪 · EXIF 信息<br><br>"
             "作者：Red & 小宋",
         )
 
@@ -604,9 +575,6 @@ class MainWindow(QMainWindow):
         # Ctrl+Q 退出
         elif key == Qt.Key.Key_Q and mod == Qt.KeyboardModifier.ControlModifier:
             self.close()
-        # Ctrl+B 切换缩略图面板
-        elif key == Qt.Key.Key_B and mod == Qt.KeyboardModifier.ControlModifier:
-            self._toggle_thumb_panel()
         # Space 幻灯播放
         elif key == Qt.Key.Key_Space:
             self._toggle_slideshow()
@@ -618,7 +586,6 @@ class MainWindow(QMainWindow):
             elif self.isFullScreen():
                 self.showNormal()
                 self.titlebar.setVisible(True)
-                self.thumb_bar.setVisible(self._thumb_visible)
             if self.slideshow.is_active:
                 self.slideshow.stop()
                 self._act_slideshow.setChecked(False)
@@ -627,11 +594,9 @@ class MainWindow(QMainWindow):
             if self.isFullScreen():
                 self.showNormal()
                 self.titlebar.setVisible(True)
-                self.thumb_bar.setVisible(self._thumb_visible)
             else:
                 self.showFullScreen()
                 self.titlebar.setVisible(False)
-                self.thumb_bar.setVisible(False)
         # ← 上一张
         elif key == Qt.Key.Key_Left:
             self._stop_slideshow()
@@ -683,6 +648,44 @@ class MainWindow(QMainWindow):
         if self.slideshow.is_active:
             self.slideshow.stop()
             self._act_slideshow.setChecked(False)
+
+    # ── Windows 原生事件（无框窗口边缘缩放） ──
+
+    def nativeEvent(self, eventType, message):
+        """拦截 WM_NCHITTEST，让 Windows 原生处理边缘拖拽缩放"""
+        if eventType == b"windows_generic_MSG" and not (self.isMaximized() or self.isFullScreen()):
+            try:
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+            except (TypeError, ValueError):
+                return super().nativeEvent(eventType, message)
+
+            if msg.message != 0x0084:  # WM_NCHITTEST
+                return super().nativeEvent(eventType, message)
+
+            # 从 LPARAM 取屏幕坐标
+            x = msg.lParam & 0xFFFF
+            y = (msg.lParam >> 16) & 0xFFFF
+            local = self.mapFromGlobal(QPoint(x, y))
+
+            d = self._get_resize_dir(local)
+            if "left" in d and "top" in d:
+                return (True, 13)  # HTTOPLEFT
+            if "right" in d and "top" in d:
+                return (True, 14)  # HTTOPRIGHT
+            if "left" in d and "bottom" in d:
+                return (True, 16)  # HTBOTTOMLEFT
+            if "right" in d and "bottom" in d:
+                return (True, 17)  # HTBOTTOMRIGHT
+            if "left" in d:
+                return (True, 10)  # HTLEFT
+            if "right" in d:
+                return (True, 11)  # HTRIGHT
+            if "top" in d:
+                return (True, 12)  # HTTOP
+            if "bottom" in d:
+                return (True, 15)  # HTBOTTOM
+
+        return super().nativeEvent(eventType, message)
 
     # ── 窗口大小变化 ──
 

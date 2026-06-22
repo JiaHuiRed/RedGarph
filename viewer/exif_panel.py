@@ -3,6 +3,7 @@
 
 """右侧 EXIF 信息面板 — 读取并展示图片 EXIF 元数据"""
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -16,14 +17,7 @@ from PyQt6.QtWidgets import (
     QLabel, QHeaderView,
 )
 
-
-def _format_size(n: int) -> str:
-    """人性化文件大小"""
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
-        n /= 1024
-    return f"{n:.1f} TB"
+from .constants import format_size as _format_size
 
 # ── 枚举映射 ──
 _METERING_MODES = {0: "未知", 1: "平均", 2: "中央重点", 3: "点测光", 4: "多点", 5: "矩阵", 6: "局部"}
@@ -65,8 +59,6 @@ def _format_sensor(v):
 def _format_enum(v):
     return _ENUM_VALS.get(int(v), str(v))
 
-
-from collections.abc import Callable
 
 # ── 需要展示的 EXIF 字段（tag_id → (标签名, 格式化函数)） ──
 _EXIF_FIELDS: dict[int, tuple[str, Callable]] = {
@@ -158,23 +150,21 @@ class ExifPanel(QWidget):
             ]))
 
             # 尝试获取图片尺寸（不依赖 EXIF）
-            img = None
+            raw = None
             try:
-                img = Image.open(str(fp))
-                w, h = img.size
-                items.append(QTreeWidgetItem(["尺寸", f"{w} × {h} px"]))
+                with Image.open(str(fp)) as img:
+                    w, h = img.size
+                    items.append(QTreeWidgetItem(["尺寸", f"{w} × {h} px"]))
+                    try:
+                        raw = dict(img.getexif())
+                    except Exception:
+                        pass
             except Exception:
                 items.append(QTreeWidgetItem(["尺寸", "无法读取"]))
 
             self._tree.addTopLevelItems(items)
 
             # ── EXIF 附加信息 ──
-            raw = None
-            if img is not None:
-                try:
-                    raw = img._getexif()
-                except Exception:
-                    pass
 
             if raw:
                 exif_items = []

@@ -156,6 +156,12 @@ class ImagePanel(QGraphicsView):
         """原始图片（未旋转）"""
         return self._source
 
+    def current_pixmap(self) -> QPixmap:
+        """返回当前显示状态的图片（含旋转，用于保存/复制）"""
+        if self._source.isNull():
+            return QPixmap()
+        return self._get_rotated_display()
+
     # ── 内部刷新 ──
 
     def _get_rotated_display(self) -> QPixmap:

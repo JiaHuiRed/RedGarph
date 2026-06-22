@@ -93,3 +93,15 @@ class FileList(QObject):
 
     def can_prev(self) -> bool:
         return self._index > 0
+
+    def remove_current(self) -> "Path | None":
+        """从列表移除当前文件（不写磁盘），返回被移除的路径"""
+        if not self._files or self._index < 0:
+            return None
+        removed = self._files.pop(self._index)
+        if not self._files:
+            self._index = -1
+        elif self._index >= len(self._files):
+            self._index = len(self._files) - 1
+        self.filesChanged.emit()
+        return removed

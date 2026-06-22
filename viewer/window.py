@@ -2,6 +2,7 @@
 #260620 Red&小宋 RedGarph V0.0.1 — 主窗口（图片 + EXIF 信息面板）
 
 import ctypes
+import subprocess
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
@@ -16,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .constants import (
-    APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT,
+    APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT, IMAGE_EXTENSIONS,
 )
 from .theme import apply_theme, THEMES, THEME_LABELS
 from .image_panel import ImagePanel
@@ -69,7 +70,7 @@ class TitleBar(QWidget):
     minimize_clicked = pyqtSignal()
     maximize_clicked = pyqtSignal()
 
-    def __init__(self, title: str = "RedGarph", parent=None):
+    def __init__(self, title: str = "RedGarph", version: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("titleBar")
         self.setFixedHeight(TITLEBAR_HEIGHT)
@@ -96,6 +97,12 @@ class TitleBar(QWidget):
         layout.addWidget(self.btn_close)
         layout.addWidget(self.btn_min)
         layout.addWidget(self.btn_max)
+
+        # ── 版本号 ──
+        if version:
+            ver_label = QLabel(f"v{version}")
+            ver_label.setObjectName("verLabel")
+            layout.addWidget(ver_label)
 
         # ── 标题 ──
         self.title_label = QLabel(title)
@@ -178,7 +185,7 @@ class MainWindow(QMainWindow):
 
     def _build_titlebar(self):
         """构建 macOS 风格标题栏 + 菜单"""
-        self.titlebar = TitleBar("RedGarph")
+        self.titlebar = TitleBar("RedGarph", version=APP_VERSION)
         self.titlebar.close_clicked.connect(self.close)
         self.titlebar.minimize_clicked.connect(self.showMinimized)
         self.titlebar.maximize_clicked.connect(self._toggle_maximize)
@@ -197,6 +204,40 @@ class MainWindow(QMainWindow):
         act_open.setShortcut("Ctrl+O")
         act_open.triggered.connect(self._open_folder)
         menu.addAction(act_open)
+
+        menu.addSeparator()
+
+        # 保存
+        act_save = QAction("保存", self)
+        act_save.setShortcut("Ctrl+S")
+        act_save.triggered.connect(self._save_image)
+        menu.addAction(act_save)
+
+        act_save_as = QAction("另存为...", self)
+        act_save_as.setShortcut("Ctrl+Shift+S")
+        act_save_as.triggered.connect(self._save_image_as)
+        menu.addAction(act_save_as)
+
+        menu.addSeparator()
+
+        # 复制
+        act_copy = QAction("复制图片", self)
+        act_copy.setShortcut("Ctrl+C")
+        act_copy.triggered.connect(self._copy_to_clipboard)
+        menu.addAction(act_copy)
+
+        menu.addSeparator()
+
+        # 文件操作
+        act_show = QAction("在资源管理器中显示", self)
+        act_show.setShortcut("Ctrl+Shift+E")
+        act_show.triggered.connect(self._show_in_explorer)
+        menu.addAction(act_show)
+
+        act_delete = QAction("删除到回收站", self)
+        act_delete.setShortcut("Del")
+        act_delete.triggered.connect(self._delete_current)
+        menu.addAction(act_delete)
 
         menu.addSeparator()
 
@@ -309,7 +350,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self):
         """连接组件信号"""
         self.file_list.currentChanged.connect(self._on_index_changed)
-        self.file_list.filesChanged.connect(self._on_files_changed)
+        self.file_list.filesChanged.connect(self._update_ui)
         self.slideshow.nextRequested.connect(self._slideshow_next)
 
     # ── 文件操作 ──
@@ -333,10 +374,7 @@ class MainWindow(QMainWindow):
         if p.is_dir():
             self.file_list.load_directory(p)
             self._update_ui()
-        elif p.is_file() and p.suffix.lower() in {
-            ".png", ".jpg", ".jpeg", ".bmp", ".gif",
-            ".tif", ".tiff", ".webp", ".ico", ".svg",
-        }:
+        elif p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
             self.file_list.load_directory(p.parent)
             idx = next(
                 (i for i, f in enumerate(self.file_list.files) if f == p),
@@ -382,9 +420,6 @@ class MainWindow(QMainWindow):
         if index >= 0:
             self._load_current()
 
-    def _on_files_changed(self):
-        self._update_ui()
-
     # ── 幻灯片 ──
 
     def _toggle_slideshow(self):
@@ -429,9 +464,9 @@ class MainWindow(QMainWindow):
             ph = self.image_panel.height()
             ih = self.info_bar.sizeHint().height()
             iw = min(pw - 40, 600)
-            x = (pw - iw) // 2
-            y = ph - ih - 20
-            self.info_bar.setGeometry(x if x >= 0 else 0, y if y >= 0 else 0, iw, ih)
+            x = max(0, (pw - iw) // 2)
+            y = max(0, ph - ih - 20)
+            self.info_bar.setGeometry(x, y, iw, ih)
 
     # ── 主题 ──
 
@@ -442,6 +477,102 @@ class MainWindow(QMainWindow):
         apply_theme(name)
         for n, act in self._theme_actions.items():
             act.setChecked(n == name)
+
+    # ── 保存 / 另存为 ──
+
+    _EXT_FMT = {
+        ".jpg": "JPEG", ".jpeg": "JPEG",
+        ".png": "PNG", ".bmp": "BMP",
+        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF",
+    }
+
+    def _save_image(self):
+        """Ctrl+S — 覆盖保存（保留当前旋转/裁剪状态）"""
+        if not self._current_path:
+            return
+        pix = self.image_panel.current_pixmap()
+        if pix.isNull():
+            return
+        fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
+        if not pix.save(str(self._current_path), fmt):
+            QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
+
+    def _save_image_as(self):
+        """Ctrl+Shift+S — 另存为"""
+        if not self._current_path:
+            return
+        pix = self.image_panel.current_pixmap()
+        if pix.isNull():
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "另存为", str(self._current_path),
+            "图片 (*.png *.jpg *.bmp *.webp *.tiff);;所有文件 (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
+        if not pix.save(path, fmt):
+            QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
+
+    # ── 剪贴板 ──
+
+    def _copy_to_clipboard(self):
+        """Ctrl+C — 复制当前图片到剪贴板"""
+        if not self.image_panel.has_image:
+            return
+        QApplication.clipboard().setPixmap(self.image_panel.current_pixmap())
+
+    # ── 资源管理器 ──
+
+    def _show_in_explorer(self):
+        """Ctrl+Shift+E — 在资源管理器中选中当前文件"""
+        if not self._current_path or not self._current_path.exists():
+            return
+        subprocess.Popen(["explorer", f"/select,{self._current_path}"])
+
+    # ── 删除到回收站 ──
+
+    def _delete_current(self):
+        """Del — 将当前文件移至回收站，自动跳到下一张"""
+        if not self._current_path or not self._current_path.exists():
+            return
+        name = self._current_path.name
+        reply = QMessageBox.question(
+            self, "删除确认", f"将 "{name}" 移至回收站？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        path = self._current_path
+        self.file_list.remove_current()   # 先从列表移除，更新界面
+
+        if not self._recycle_file(path):
+            QMessageBox.warning(self, "删除失败", f"无法移至回收站：{name}")
+
+    @staticmethod
+    def _recycle_file(path: Path) -> bool:
+        """Windows Shell API — SHFileOperationW 移至回收站"""
+        class _Op(ctypes.Structure):
+            _fields_ = [
+                ("hwnd",    ctypes.c_void_p),
+                ("wFunc",   ctypes.c_uint),
+                ("pFrom",   ctypes.c_void_p),
+                ("pTo",     ctypes.c_void_p),
+                ("fFlags",  ctypes.c_ushort),
+                ("fAborted",ctypes.c_bool),
+                ("hMapping",ctypes.c_void_p),
+                ("pTitle",  ctypes.c_void_p),
+            ]
+        # pFrom 需要双 null 结尾的宽字符串
+        buf = ctypes.create_unicode_buffer(str(path) + "\0")
+        op = _Op(
+            wFunc=3,                        # FO_DELETE
+            pFrom=ctypes.addressof(buf),
+            fFlags=0x50,                    # FOF_ALLOWUNDO | FOF_NOCONFIRMATION
+        )
+        return ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0
 
     # ── 关于 ──
 
@@ -572,6 +703,25 @@ class MainWindow(QMainWindow):
         # Ctrl+O 打开文件夹
         if key == Qt.Key.Key_O and mod == Qt.KeyboardModifier.ControlModifier:
             self._open_folder()
+        # Ctrl+S 保存
+        elif key == Qt.Key.Key_S and mod == Qt.KeyboardModifier.ControlModifier:
+            self._save_image()
+        # Ctrl+Shift+S 另存为
+        elif key == Qt.Key.Key_S and mod == (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+        ):
+            self._save_image_as()
+        # Ctrl+C 复制到剪贴板
+        elif key == Qt.Key.Key_C and mod == Qt.KeyboardModifier.ControlModifier:
+            self._copy_to_clipboard()
+        # Ctrl+Shift+E 在资源管理器中显示
+        elif key == Qt.Key.Key_E and mod == (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+        ):
+            self._show_in_explorer()
+        # Del 删除到回收站
+        elif key == Qt.Key.Key_Delete and mod == Qt.KeyboardModifier.NoModifier:
+            self._delete_current()
         # Ctrl+Q 退出
         elif key == Qt.Key.Key_Q and mod == Qt.KeyboardModifier.ControlModifier:
             self.close()
@@ -662,9 +812,9 @@ class MainWindow(QMainWindow):
             if msg.message != 0x0084:  # WM_NCHITTEST
                 return super().nativeEvent(eventType, message)
 
-            # 从 LPARAM 取屏幕坐标
-            x = msg.lParam & 0xFFFF
-            y = (msg.lParam >> 16) & 0xFFFF
+            # 从 LPARAM 取屏幕坐标（有符号16位，支持多屏幕负坐标）
+            x = ctypes.c_short(msg.lParam & 0xFFFF).value
+            y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
             local = self.mapFromGlobal(QPoint(x, y))
 
             d = self._get_resize_dir(local)

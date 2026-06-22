@@ -1,22 +1,13 @@
 #author Red
 #260620 Red&小宋 RedGarph V0.0.1 — 图片信息浮层
 
-import os
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-
-def _format_size(size_bytes: int) -> str:
-    """可读文件大小"""
-    b = float(size_bytes)
-    for unit in ("B", "KB", "MB", "GB"):
-        if b < 1024:
-            return f"{b:.1f} {unit}"
-        b /= 1024
-    return f"{b:.1f} TB"
+from .constants import format_size as _format_size
 
 
 class InfoBar(QWidget):

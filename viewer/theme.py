@@ -35,6 +35,7 @@ QMainWindow, QWidget { background-color: #1e1e1e; color: #e0e0e0; }
 /* ── 标题栏 ── */
 #titleBar { background-color: #2d2d2d; border-bottom: 1px solid #3c3c3c; }
 #titleLabel { color: #cccccc; font-size: 13px; }
+#verLabel { color: #666666; font-size: 11px; }
 
 /* ── 缩略图栏 ── */
 #thumbBar { background-color: #252525; border-top: 1px solid #3c3c3c; }
@@ -102,6 +103,7 @@ QMainWindow, QWidget { background-color: #f5f5f5; color: #333; }
 
 #titleBar { background-color: #e8e8e8; border-bottom: 1px solid #d0d0d0; }
 #titleLabel { color: #555; font-size: 13px; }
+#verLabel { color: #aaaaaa; font-size: 11px; }
 
 #thumbBar { background-color: #ececec; border-top: 1px solid #d0d0d0; }
 #thumbBar QListWidget {
@@ -162,6 +164,7 @@ QMainWindow, QWidget { background-color: #0d1b2a; color: #c8d6e5; }
 
 #titleBar { background-color: #112240; border-bottom: 1px solid #1a3a5c; }
 #titleLabel { color: #8892b0; font-size: 13px; }
+#verLabel { color: #3a5078; font-size: 11px; }
 
 #thumbBar { background-color: #0a1628; border-top: 1px solid #1a3a5c; }
 #thumbBar QListWidget {

@@ -1,5 +1,44 @@
 # RedGarph 更新日志
 
+## 0.0.6（2026-06-22）
+
+### ✨ 新功能
+
+- **保存（Ctrl+S）** — 覆盖保存当前图片（含旋转/裁剪状态），支持 JPEG / PNG / BMP / WebP / TIFF
+- **另存为（Ctrl+Shift+S）** — 文件对话框选择新路径保存
+- **复制到剪贴板（Ctrl+C）** — 复制当前图片（含旋转状态）到系统剪贴板
+- **删除到回收站（Del）** — 确认后将文件移至 Windows 回收站，自动跳到下一张
+- **在资源管理器中显示（Ctrl+Shift+E）** — 调用 `explorer /select` 在资源管理器中选中当前文件
+
+### 💎 代码质量
+
+- **移除孤立常量** — 删除 `THUMB_PANEL_WIDTH` / `THUMB_SIZE` / `THUMB_LIST_SIZE`（缩略图面板 0.0.4 已移除的遗留垃圾）
+- **`file_list.py` 新增 `remove_current()`** — 从文件列表移除当前项并自动调整索引，复用于删除流程
+
+---
+
+## 0.0.5（2026-06-22）
+
+### ✨ 新功能
+
+- **标题栏版本号** — 交通灯按钮旁显示小版本标签（`v0.0.5`），三主题均适配
+
+### 🐛 Bug 修复
+
+- **多显示器负坐标** — `nativeEvent` LPARAM 坐标改用有符号 `ctypes.c_short` 解析，修复多屏幕左侧/上侧窗口边缘缩放失效问题（`window.py`）
+
+### 💎 代码质量
+
+- **PIL Image 文件句柄泄漏** — `exif_panel.py` 改用 `with Image.open(...)` 保证每次关闭；同时从私有 API `_getexif()` 迁移到公开 API `getexif()`
+- **消除 `_format_size` 重复定义** — 提取到 `constants.py`，`info_bar.py` / `exif_panel.py` 统一引用
+- **消除硬编码扩展名** — `load_path` 中内联的扩展名集合改用 `IMAGE_EXTENSIONS` 常量（`window.py`）
+- **修正导入位置** — `from collections.abc import Callable` 移至 `exif_panel.py` 文件顶部
+- **移除冗余中间方法** — `_on_files_changed` 单行转发改为信号直连 `_update_ui`（`window.py`）
+- **坐标计算简化** — `_position_info_bar` 中 `x if x >= 0 else 0` 改为 `max(0, x)`
+- **版本号统一** — `constants.py` `APP_VERSION` 与实际发布版本保持一致
+
+---
+
 ## 0.0.4（2026-06-20）
 
 ### ✨ 新功能

@@ -15,6 +15,7 @@
 
 - **删除功能语法错误** — `window.py` 确认对话框 f-string 内嵌引号未转义，导致模块无法导入（`f'将 "{name}" 移至回收站？'`）
 - **删除逻辑回滚风险** — `_delete_current` 先调用 `remove_current()` 再从列表移除，修复为「回收站成功后再移除列表项」，避免文件仍在磁盘但列表已消失
+- **PyInstaller windowed exe 启动闪退** — `nativeEvent` override + `FramelessWindowHint` 在 `--windowed` 模式下导致 `win.show()` 死锁，删除 `nativeEvent` 方法（边缘缩放回退到 mouseEvent 方案）；同时设置 `QT_QPA_PLATFORM_PLUGIN_PATH` 修复 Qt 平台插件路径检测、显式 `import ctypes.wintypes` 避免 PyInstaller 漏打包（`window.py`、`main.py`）
 
 ### 💎 代码质量
 
@@ -22,6 +23,7 @@
 - **`.gitignore` 补充** — 显式忽略 `crash.log`，避免崩溃日志被 git 跟踪
 - **快捷键统一入口** — `_build_titlebar` 移除 11 处 `setShortcut`，所有快捷键统一由 `keyPressEvent` 处理，消除菜单与键盘事件重复注册
 - **EXIF 单次读取** — `exif_panel.py` `set_image` 中 `Image.open` 获取尺寸后直接读取 `getexif()`，避免重复打开文件
+- **提前创建 native window** — `__init__` 末尾调用 `self.winId()` 让 `FramelessWindowHint` 在 `show()` 前生效，消除初始窗口框闪烁（`window.py`）
 
 ---
 

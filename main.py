@@ -1,6 +1,7 @@
 #author Red
-#260620 Red&小宋 RedGarph V0.0.4 — 图片查看器入口
+#260622 Red&小宋 RedGarph V0.0.7 — 图片查看器入口
 
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -11,10 +12,13 @@ from PyQt6.QtWidgets import QApplication
 
 from viewer.window import MainWindow
 
+# PyInstaller onefile 模式：sys.executable 是临时目录，日志存不走
+# → 改用 exe 所在目录（sys.argv[0] 始终是原始 exe 路径）
 if getattr(sys, "frozen", False):
-    LOG_DIR = Path(sys.executable).parent          # exe 所在目录
+    LOG_DIR = Path(sys.argv[0]).resolve().parent
 else:
-    LOG_DIR = Path(__file__).resolve().parent      # 源码目录
+    LOG_DIR = Path(__file__).resolve().parent
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "crash.log"
 
 
@@ -38,6 +42,14 @@ def _excepthook(typ, val, tb):
 def main():
     sys.excepthook = _excepthook
     qInstallMessageHandler(_qt_handler)
+
+    # ── PyInstaller frozen: 确保 Qt 能找到平台插件 ──
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None) or Path(sys.argv[0]).resolve().parent
+        plugin_path = os.path.join(meipass, "PyQt6", "Qt6", "plugins", "platforms")
+        if os.path.isdir(plugin_path):
+            os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = plugin_path
+            _log(f"QT_QPA_PLATFORM_PLUGIN_PATH={plugin_path}")
 
     try:
         app = QApplication(sys.argv)

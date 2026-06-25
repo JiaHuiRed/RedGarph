@@ -21,4 +21,4 @@
 - 文件列表：`viewer/file_list.py`
 - EXIF 面板：`viewer/exif_panel.py`
 - 主题系统：`viewer/theme.py`
-- 版本号：`viewer/constants.py:APP_VERSION`
+- 版本号：`viewer/constants.py:APP_VERSION`（唯一真实来源）；升版时必须同步检查 `build.bat`、`build_debug.bat`、`main.py` 注释里的硬编码版本字符串

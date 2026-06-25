@@ -1,5 +1,23 @@
 # RedGarph 更新日志
 
+## 0.1.0（2026-06-25）
+
+### ✨ 新功能
+
+- **无框 macOS 风格窗口** — `FramelessWindowHint` + 自定义交通灯标题栏（关闭/最小化/全屏），三主题均适配（`window.py`）
+- **边缘拖拽缩放** — `_EdgeOverlay` 遮罩层实现四边/顶点拖拽调整窗口大小，替代原生 `nativeEvent` 方案（`window.py`）
+
+### 🐛 Bug 修复
+
+- **PyInstaller windowed 模式闪退** — `nativeEvent` override + `FramelessWindowHint` 在 `--windowed` 下死锁，删除该方法；同时设置 `QT_QPA_PLATFORM_PLUGIN_PATH` 修复 Qt 插件路径、显式 `import ctypes.wintypes` 避免漏打包（`window.py`、`main.py`）
+
+### 💎 代码质量
+
+- **快捷键统一入口** — `_build_titlebar` 移除 11 处 `QAction.setShortcut`，所有快捷键统一由 `keyPressEvent` 处理
+- **EXIF 单次读取** — `exif_panel.py` `set_image` 避免重复 `Image.open`
+
+---
+
 ## 0.0.9（2026-06-25）
 
 ### 🐛 Bug 修复

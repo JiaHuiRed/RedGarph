@@ -21,7 +21,7 @@ WINDOW_HEIGHT = 800
 
 # ── 应用信息 ──
 APP_NAME = "RedGarph"
-APP_VERSION = "0.0.9"
+APP_VERSION = "0.1.0"
 ORG_NAME = "RedStudio"
 
 

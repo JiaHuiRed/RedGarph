@@ -1,0 +1,293 @@
+{
+  "date": "2026-06-22",
+  "tools": {
+    "vision_analyze_image": 5,
+    "glob": 11,
+    "read": 84,
+    "grep": 7,
+    "edit": 27,
+    "bash": 242,
+    "mcp-process-mgmt_start_process": 5,
+    "mcp-process-mgmt_send_input": 2,
+    "mcp-process-mgmt_wait_for_prompt": 3,
+    "mcp-process-mgmt_read_process_output": 3,
+    "compress": 6,
+    "mcp-process-mgmt_list_processes": 1,
+    "mcp-process-mgmt_stop_process": 2,
+    "git": 10,
+    "git-summary": 1,
+    "write": 14,
+    "skill": 1
+  },
+  "files": {
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\main.py": {
+      "reads": 12,
+      "edits": 7,
+      "writes": 0,
+      "additions": 44,
+      "deletions": 32
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\error.log": {
+      "reads": 2,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\crash.log": {
+      "reads": 5,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\window.py": {
+      "reads": 25,
+      "edits": 7,
+      "writes": 0,
+      "additions": 28,
+      "deletions": 59
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\build.bat": {
+      "reads": 8,
+      "edits": 5,
+      "writes": 0,
+      "additions": 6,
+      "deletions": 6
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\RedGarph_debug.spec": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\run.bat": {
+      "reads": 2,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\__init__.py": {
+      "reads": 4,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\requirements.txt": {
+      "reads": 2,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\build_debug.bat": {
+      "reads": 5,
+      "edits": 4,
+      "writes": 0,
+      "additions": 5,
+      "deletions": 5
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\constants.py": {
+      "reads": 3,
+      "edits": 1,
+      "writes": 0,
+      "additions": 1,
+      "deletions": 1
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\RedGarph_debug_test.spec": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\theme.py": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\image_panel.py": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\file_list.py": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\info_bar.py": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\slideshow.py": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\viewer\\exif_panel.py": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\RedGarph_diag.spec": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\RedGarph_min.spec": {
+      "reads": 1,
+      "edits": 0,
+      "writes": 0,
+      "additions": 0,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\CHANGELOG.md": {
+      "reads": 2,
+      "edits": 1,
+      "writes": 0,
+      "additions": 13,
+      "deletions": 1
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\test_app.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 27,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\dump_meipass.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 35,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\dump_pyqt.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 64,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\dump_all.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 2,
+      "additions": 57,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\test_qt.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 31,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\isolate_crash.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 101,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\isolate_crash2.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 46,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\isolate_crash3.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 46,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\bisect_show.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 52,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\bisect2.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 33,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\bisect3.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 34,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\bisect4.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 40,
+      "deletions": 0
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\bisect5.py": {
+      "reads": 0,
+      "edits": 0,
+      "writes": 1,
+      "additions": 40,
+      "deletions": 0
+    },
+    "C:\\Users\\Administrator\\.redcode\\memory\\260622.md": {
+      "reads": 1,
+      "edits": 1,
+      "writes": 0,
+      "additions": 11,
+      "deletions": 4
+    },
+    "D:\\AI\\KLX\\Qiu\\RedGarph\\README.md": {
+      "reads": 1,
+      "edits": 1,
+      "writes": 0,
+      "additions": 1,
+      "deletions": 1
+    }
+  },
+  "totalEdits": 41,
+  "totalLinesAdded": 715,
+  "totalLinesDeleted": 109
+}

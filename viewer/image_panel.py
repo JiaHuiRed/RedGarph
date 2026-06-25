@@ -180,13 +180,21 @@ class ImagePanel(QGraphicsView):
         display = self._get_rotated_display()
         self._item.setPixmap(display)
 
-        # 应用缩放
+        # 临时切到居中锚点，避免 AnchorUnderMouse 导致非滚轮缩放时图片偏移
+        old_tx = self.transformationAnchor()
+        old_rx = self.resizeAnchor()
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+
         if self._zoom is None:
-            self.resetTransform()
+            self._scene.setSceneRect(self._item.boundingRect())
             self.fitInView(self._item, Qt.AspectRatioMode.KeepAspectRatio)
         else:
             self.resetTransform()
             self.scale(self._zoom, self._zoom)
+
+        self.setTransformationAnchor(old_tx)
+        self.setResizeAnchor(old_rx)
 
         self._update_zoom_label()
 
@@ -214,10 +222,15 @@ class ImagePanel(QGraphicsView):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # 适应窗口模式下重新适配
         if self._zoom is None and not self._source.isNull():
+            old_tx = self.transformationAnchor()
+            old_rx = self.resizeAnchor()
+            self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
+            self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
             self._scene.setSceneRect(self._item.boundingRect())
             self.fitInView(self._item, Qt.AspectRatioMode.KeepAspectRatio)
+            self.setTransformationAnchor(old_tx)
+            self.setResizeAnchor(old_rx)
         self._update_zoom_label()
         # 裁剪模式下重定位提示
         if self._crop_mode and self._crop_hint.isVisible():
@@ -230,7 +243,6 @@ class ImagePanel(QGraphicsView):
         if self._source.isNull():
             return
 
-        # 如果当前是适应模式，先从 1.0 开始缩放
         if self._zoom is None:
             self._zoom = 1.0
 
@@ -238,7 +250,11 @@ class ImagePanel(QGraphicsView):
         new_zoom = self._zoom * factor
         new_zoom = max(ZOOM_MIN, min(ZOOM_MAX, new_zoom))
         self._zoom = new_zoom
-        self._refresh()
+
+        # 直接缩放，保留 AnchorUnderMouse 以鼠标为中心
+        self.resetTransform()
+        self.scale(self._zoom, self._zoom)
+        self._update_zoom_label()
         event.accept()
 
     # ── 双击切换 ──

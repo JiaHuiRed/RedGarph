@@ -5,7 +5,7 @@
 
 
 import ctypes
-
+import ctypes.wintypes  # 确保 PyInstaller 打包时包含该模块
 import subprocess
 
 from pathlib import Path
@@ -15,11 +15,8 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
 
 from PyQt6.QtGui import (
-
     QAction, QMouseEvent, QDragEnterEvent, QDropEvent, QPainter, QColor,
-
-    QCursor,
-
+    QCursor, QRegion,
 )
 
 from PyQt6.QtWidgets import (
@@ -287,11 +284,105 @@ class TitleBar(QWidget):
 
 
 # ═══════════════════════════════════════════
-
-# ── 主窗口 ──
-
+# ── 边缘缩放遮罩 ──
 # ═══════════════════════════════════════════
 
+
+class _EdgeOverlay(QWidget):
+    """透明遮罩层：只保留边缘 MARGIN 环响应鼠标，中间区域透传事件"""
+    _MARGIN = 8
+    _MIN_W  = 600
+    _MIN_H  = 400
+    _CURSORS = {
+        'tl': Qt.CursorShape.SizeFDiagCursor, 'tr': Qt.CursorShape.SizeBDiagCursor,
+        'bl': Qt.CursorShape.SizeBDiagCursor, 'br': Qt.CursorShape.SizeFDiagCursor,
+        'l':  Qt.CursorShape.SizeHorCursor,   'r':  Qt.CursorShape.SizeHorCursor,
+        't':  Qt.CursorShape.SizeVerCursor,   'b':  Qt.CursorShape.SizeVerCursor,
+    }
+
+    def __init__(self, parent, window):
+        super().__init__(parent)
+        self._window    = window
+        self._resizing  = False
+        self._edge      = None
+        self._start_pos = None
+        self._start_geo = None
+        self.setMouseTracking(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+
+    def _update_mask(self):
+        w, h = self.width(), self.height()
+        m    = self._MARGIN
+        full = QRegion(0, 0, w, h)
+        inner = QRegion(m, m, w - 2 * m, h - 2 * m)
+        self.setMask(full.subtracted(inner))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._update_mask()
+
+    def _edge_at(self, pos):
+        w, h = self.width(), self.height()
+        m = self._MARGIN
+        x, y = int(pos.x()), int(pos.y())
+        on_l = x <= m; on_r = x >= w - m - 1
+        on_t = y <= m; on_b = y >= h - m - 1
+        if on_t and on_l: return 'tl'
+        if on_t and on_r: return 'tr'
+        if on_b and on_l: return 'bl'
+        if on_b and on_r: return 'br'
+        if on_l: return 'l'
+        if on_r: return 'r'
+        if on_t: return 't'
+        if on_b: return 'b'
+        return None
+
+    def mouseMoveEvent(self, e):
+        if self._resizing and self._edge:
+            dx = e.globalPosition().x() - self._start_pos.x()
+            dy = e.globalPosition().y() - self._start_pos.y()
+            rx, ry, rw, rh = self._start_geo
+            edge = self._edge
+            if 'l' in edge: rx += dx; rw -= dx
+            if 'r' in edge: rw += dx
+            if 't' in edge: ry += dy; rh -= dy
+            if 'b' in edge: rh += dy
+            if rw < self._MIN_W:
+                if 'l' in edge: rx -= (self._MIN_W - rw)
+                rw = self._MIN_W
+            if rh < self._MIN_H:
+                if 't' in edge: ry -= (self._MIN_H - rh)
+                rh = self._MIN_H
+            self._window.setGeometry(int(rx), int(ry), int(rw), int(rh))
+            return
+        edge = self._edge_at(e.position())
+        self.setCursor(self._CURSORS.get(edge, Qt.CursorShape.ArrowCursor))
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            edge = self._edge_at(e.position())
+            if edge:
+                self._resizing  = True
+                self._edge      = edge
+                self._start_pos = e.globalPosition().toPoint()
+                self._start_geo = (self._window.x(), self._window.y(),
+                                   self._window.width(), self._window.height())
+                return
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        if self._resizing:
+            self._resizing  = False
+            self._edge      = None
+            self._start_pos = None
+            self._start_geo = None
+            return
+        super().mouseReleaseEvent(e)
+
+
+# ═══════════════════════════════════════════
+# ── 主窗口 ──
+# ═══════════════════════════════════════════
 
 
 class MainWindow(QMainWindow):
@@ -303,8 +394,6 @@ class MainWindow(QMainWindow):
     def __init__(self, theme: str = "night"):
 
         super().__init__()
-
-
 
         self._theme = theme
 
@@ -326,18 +415,6 @@ class MainWindow(QMainWindow):
 
 
 
-        # 缩放状态
-
-        self._resizing = False
-
-        self._resize_dir: set[str] = set()
-
-        self._drag_pos: QPoint | None = None
-
-        self._start_geo: QRect | None = None
-
-
-
         apply_theme(self._theme)
 
 
@@ -355,14 +432,14 @@ class MainWindow(QMainWindow):
         self.exif_panel = ExifPanel()
 
 
-
         self._build_titlebar()
 
         self._build_ui()
 
         self._connect_signals()
 
-
+        # 提前创建 native window，让 FramelessWindowHint show 前就生效，避免闪框
+        self.winId()
 
     # ── 构建 UI ──
 
@@ -572,9 +649,14 @@ class MainWindow(QMainWindow):
 
         """构建主布局：水平分割 = [缩略图面板 | 图片区域]"""
 
+        print("[DEBUG] _build_ui start", flush=True)
         central = QWidget()
 
         self.setCentralWidget(central)
+
+        # 边缘缩放遮罩，父控件为 central，放进布局最上层
+        self._edge_overlay = _EdgeOverlay(central, self)
+        print("[DEBUG] central widget set", flush=True)
 
 
 
@@ -587,12 +669,14 @@ class MainWindow(QMainWindow):
 
 
         root.addWidget(self.titlebar)
+        print("[DEBUG] titlebar added", flush=True)
 
 
 
         # ── 水平分割：图片区域 | EXIF 面板 ──
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        print("[DEBUG] splitter created", flush=True)
 
         splitter.setObjectName("MainSplitter")
 
@@ -628,8 +712,7 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(self.exif_panel)
 
-
-
+        print("[DEBUG] before setSizes", flush=True)
         splitter.setSizes([
 
             WINDOW_WIDTH - ExifPanel.PANEL_WIDTH,
@@ -637,7 +720,7 @@ class MainWindow(QMainWindow):
             ExifPanel.PANEL_WIDTH,
 
         ])
-
+        print("[DEBUG] after setSizes", flush=True)
         splitter.setCollapsible(0, False)
 
         splitter.setCollapsible(1, False)
@@ -645,6 +728,17 @@ class MainWindow(QMainWindow):
 
 
         root.addWidget(splitter, 1)
+
+
+
+        # 边缘缩放遮罩（独立悬浮层，不占 layout 空间）
+
+        self._edge_overlay = _EdgeOverlay(self, self)
+        self._edge_overlay.setGeometry(self.centralWidget().geometry())
+        self._edge_overlay.show()
+        self._edge_overlay.raise_()
+        print("[DEBUG] edge overlay added", flush=True)
+        print("[DEBUG] edge overlay added", flush=True)
 
 
 
@@ -1179,111 +1273,6 @@ class MainWindow(QMainWindow):
             self.showMaximized()
 
 
-
-    # ── 鼠标事件（窗口缩放） ──
-
-
-
-    def mousePressEvent(self, event):
-
-        if event.button() == Qt.MouseButton.LeftButton:
-
-            d = self._get_resize_dir(event.pos())
-
-            if d:
-
-                self._resizing = True
-
-                self._resize_dir = d
-
-                self._drag_pos = event.globalPosition().toPoint()
-
-                self._start_geo = QRect(self.geometry())
-
-                event.accept()
-
-                return
-
-        super().mousePressEvent(event)
-
-
-
-    def mouseMoveEvent(self, event):
-
-        if self._resizing and self._resize_dir and self._drag_pos and self._start_geo:
-
-            delta = event.globalPosition().toPoint() - self._drag_pos
-
-            geo = QRect(self._start_geo)
-
-            if "left" in self._resize_dir:
-
-                geo.setLeft(geo.left() + delta.x())
-
-            if "right" in self._resize_dir:
-
-                geo.setRight(geo.right() + delta.x())
-
-            if "top" in self._resize_dir:
-
-                geo.setTop(geo.top() + delta.y())
-
-            if "bottom" in self._resize_dir:
-
-                geo.setBottom(geo.bottom() + delta.y())
-
-            if geo.width() >= self.minimumWidth() and geo.height() >= self.minimumHeight():
-
-                self.setGeometry(geo)
-
-            event.accept()
-
-            return
-
-        self._update_cursor(event.pos())
-
-        super().mouseMoveEvent(event)
-
-
-
-    def mouseReleaseEvent(self, event):
-
-        if self._resizing:
-
-            self._resizing = False
-
-            self._resize_dir = set()
-
-            self._drag_pos = None
-
-            self._start_geo = None
-
-            event.accept()
-
-            return
-
-        super().mouseReleaseEvent(event)
-
-
-
-    def changeEvent(self, event):
-
-        super().changeEvent(event)
-
-        if event and event.type() == event.Type.WindowStateChange:
-
-            m = 0 if self.isMaximized() else 1
-
-            central = self.centralWidget()
-
-            if central:
-
-                central.layout().setContentsMargins(m, 0, m, m)
-
-            self._update_cursor(self.mapFromGlobal(QCursor.pos()))
-
-
-
     # ── 拖拽 ──
 
 
@@ -1562,84 +1551,6 @@ class MainWindow(QMainWindow):
 
             self._act_slideshow.setChecked(False)
 
-
-
-    # ── Windows 原生事件（无框窗口边缘缩放） ──
-
-
-
-    def nativeEvent(self, eventType, message):
-
-        """拦截 WM_NCHITTEST，让 Windows 原生处理边缘拖拽缩放"""
-
-        if eventType == b"windows_generic_MSG" and not (self.isMaximized() or self.isFullScreen()):
-
-            try:
-
-                msg = ctypes.wintypes.MSG.from_address(int(message))
-
-            except (TypeError, ValueError):
-
-                return super().nativeEvent(eventType, message)
-
-
-
-            if msg.message != 0x0084:  # WM_NCHITTEST
-
-                return super().nativeEvent(eventType, message)
-
-
-
-            # 从 LPARAM 取屏幕坐标（有符号16位，支持多屏幕负坐标）
-
-            x = ctypes.c_short(msg.lParam & 0xFFFF).value
-
-            y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-
-            local = self.mapFromGlobal(QPoint(x, y))
-
-
-
-            d = self._get_resize_dir(local)
-
-            if "left" in d and "top" in d:
-
-                return (True, 13)  # HTTOPLEFT
-
-            if "right" in d and "top" in d:
-
-                return (True, 14)  # HTTOPRIGHT
-
-            if "left" in d and "bottom" in d:
-
-                return (True, 16)  # HTBOTTOMLEFT
-
-            if "right" in d and "bottom" in d:
-
-                return (True, 17)  # HTBOTTOMRIGHT
-
-            if "left" in d:
-
-                return (True, 10)  # HTLEFT
-
-            if "right" in d:
-
-                return (True, 11)  # HTRIGHT
-
-            if "top" in d:
-
-                return (True, 12)  # HTTOP
-
-            if "bottom" in d:
-
-                return (True, 15)  # HTBOTTOM
-
-
-
-        return super().nativeEvent(eventType, message)
-
-
-
     # ── 窗口大小变化 ──
 
 
@@ -1649,4 +1560,8 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
 
         self._position_info_bar()
+
+        # 同步边缘缩放遮罩位置/大小
+        geo = self.centralWidget().geometry()
+        self._edge_overlay.setGeometry(geo)
 

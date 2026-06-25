@@ -1,5 +1,13 @@
 # RedGarph 更新日志
 
+## 0.0.9（2026-06-25）
+
+### 🐛 Bug 修复
+
+- **无框窗口边缘缩放失效** — 删除 `nativeEvent`（PyInstaller `--windowed` 下与 `FramelessWindowHint` 死锁），改用 `_EdgeOverlay` 遮罩层实现四边/顶点缩放：透明 widget + `QRegion` 挖空中间区域，只保留边缘 8px 环响应鼠标拖拽，完全不碰原生事件循环（`window.py`）
+
+---
+
 ## 0.0.8（2026-06-25）
 
 ### 💎 代码质量

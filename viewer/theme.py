@@ -37,22 +37,6 @@ QMainWindow, QWidget { background-color: #1e1e1e; color: #e0e0e0; }
 #titleLabel { color: #cccccc; font-size: 13px; }
 #verLabel { color: #666666; font-size: 11px; }
 
-/* ── 缩略图栏 ── */
-#thumbBar { background-color: #252525; border-top: 1px solid #3c3c3c; }
-#thumbBar QListWidget {
-    background-color: #252525; border: none; outline: none;
-}
-#thumbBar QListWidget::item {
-    background-color: transparent; border: 2px solid transparent; border-radius: 4px;
-    margin: 4px 2px; padding: 2px;
-}
-#thumbBar QListWidget::item:selected {
-    border: 2px solid #4a9eff; background-color: rgba(74, 158, 255, 0.1);
-}
-#thumbBar QListWidget::item:hover {
-    border: 2px solid #6a6a6a;
-}
-
 /* ── 信息栏 ── */
 #infoBar {
     background-color: rgba(30, 30, 30, 180); color: #e0e0e0;
@@ -105,21 +89,6 @@ QMainWindow, QWidget { background-color: #f5f5f5; color: #333; }
 #titleLabel { color: #555; font-size: 13px; }
 #verLabel { color: #aaaaaa; font-size: 11px; }
 
-#thumbBar { background-color: #ececec; border-top: 1px solid #d0d0d0; }
-#thumbBar QListWidget {
-    background-color: #ececec; border: none; outline: none;
-}
-#thumbBar QListWidget::item {
-    background-color: transparent; border: 2px solid transparent; border-radius: 4px;
-    margin: 4px 2px; padding: 2px;
-}
-#thumbBar QListWidget::item:selected {
-    border: 2px solid #0078d4; background-color: rgba(0, 120, 212, 0.08);
-}
-#thumbBar QListWidget::item:hover {
-    border: 2px solid #aaa;
-}
-
 #infoBar {
     background-color: rgba(245, 245, 245, 200); color: #333;
     border-radius: 6px; padding: 6px 12px; font-size: 13px;
@@ -165,21 +134,6 @@ QMainWindow, QWidget { background-color: #0d1b2a; color: #c8d6e5; }
 #titleBar { background-color: #112240; border-bottom: 1px solid #1a3a5c; }
 #titleLabel { color: #8892b0; font-size: 13px; }
 #verLabel { color: #3a5078; font-size: 11px; }
-
-#thumbBar { background-color: #0a1628; border-top: 1px solid #1a3a5c; }
-#thumbBar QListWidget {
-    background-color: #0a1628; border: none; outline: none;
-}
-#thumbBar QListWidget::item {
-    background-color: transparent; border: 2px solid transparent; border-radius: 4px;
-    margin: 4px 2px; padding: 2px;
-}
-#thumbBar QListWidget::item:selected {
-    border: 2px solid #5dade2; background-color: rgba(93, 173, 226, 0.1);
-}
-#thumbBar QListWidget::item:hover {
-    border: 2px solid #2c5282;
-}
 
 #infoBar {
     background-color: rgba(13, 27, 42, 200); color: #c8d6e5;

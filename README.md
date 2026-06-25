@@ -3,7 +3,7 @@
 > **macOS 风格本地图片查看器。** 缩放/旋转/裁剪/EXIF 信息面板。
 > _A macOS-style local image viewer with zoom, rotate, crop, and EXIF info panel._
 
-[![版本](https://badgen.net/badge/版本/0.0.6/blue)](CHANGELOG.md)
+[![版本](https://badgen.net/badge/版本/0.0.7/blue)](CHANGELOG.md)
 [![平台](https://badgen.net/badge/平台/Windows/lightgrey)]()
 [![Tech](https://badgen.net/badge/Tech/PyQt6/orange)]()
 

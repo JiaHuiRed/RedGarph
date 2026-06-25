@@ -2,7 +2,7 @@
 
 ## 当前进度
 - 最后工作日期：260625
-- 上次做到：0.0.8 维护完成并推送 master
+- 上次做到：V0.1.0 已推送 — 无框窗口 + 交通灯标题栏 + _EdgeOverlay 边缘缩放 + PyInstaller windowed 闪退修复 + 版本号统一
 - 待办：1. 锁定 requirements.txt 版本（PyQt6/Pillow）2. build.bat 加 --add-data 3. 核心逻辑集成测试
 
 ## 架构决策

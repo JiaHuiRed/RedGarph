@@ -11,6 +11,8 @@
 
 - **清理主题死样式** — `theme.py` 移除三套主题中 `thumbBar` 相关 QSS（缩略图面板 0.0.4 已删除，样式残留）
 - **`.gitignore` 补充** — 显式忽略 `crash.log`，避免崩溃日志被 git 跟踪
+- **快捷键统一入口** — `_build_titlebar` 移除 11 处 `setShortcut`，所有快捷键统一由 `keyPressEvent` 处理，消除菜单与键盘事件重复注册
+- **EXIF 单次读取** — `exif_panel.py` `set_image` 中 `Image.open` 获取尺寸后直接读取 `getexif()`，避免重复打开文件
 
 ---
 

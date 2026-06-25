@@ -1,5 +1,14 @@
 # RedGarph 更新日志
 
+## 0.0.8（2026-06-25）
+
+### 💎 代码质量
+
+- **快捷键统一入口** — `_build_titlebar` 移除 11 处 `QAction.setShortcut`，所有快捷键统一由 `keyPressEvent` 处理，消除菜单与键盘事件重复注册
+- **EXIF 单次读取** — `exif_panel.py` `set_image` 中 `Image.open` 获取尺寸后直接读取 `getexif()`，避免重复打开文件
+
+---
+
 ## 0.0.7（2026-06-25）
 
 ### 🐛 Bug 修复

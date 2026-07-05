@@ -752,6 +752,10 @@ class MainWindow(QMainWindow):
 
         self.slideshow.nextRequested.connect(self._slideshow_next)
 
+        self.image_panel.cropConfirmed.connect(lambda: self._act_crop.setChecked(False))
+        self.image_panel.cropCancelled.connect(lambda: self._act_crop.setChecked(False))
+        self.image_panel.toggleCropRequested.connect(self._toggle_crop)
+        self.image_panel.saveRequested.connect(self._save_image)
 
 
     # ── 文件操作 ──
@@ -1342,11 +1346,6 @@ class MainWindow(QMainWindow):
                 self.image_panel.cancel_crop()
 
 
-
-                self._act_crop.setChecked(False)
-
-
-
             elif self.isFullScreen():
 
 
@@ -1520,11 +1519,6 @@ class MainWindow(QMainWindow):
 
 
                 self.image_panel.apply_crop()
-
-
-
-                self._act_crop.setChecked(False)
-
 
 
             else:

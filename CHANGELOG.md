@@ -1,5 +1,19 @@
 # RedGarph 更新日志
 
+## 0.1.1（2026-07-05）
+
+### ✨ 新功能
+
+- **裁剪模式重构** — 替换 `QRubberBand` 为自定义 `_CropOverlay`：暗化选区外部、三分线参考线、8 向拖拽手柄、选区移动；光标随位置变化（`image_panel.py`）
+- **底部裁剪工具栏** — 右下角新增 `[裁剪]` 和 `[保存]` 按钮，裁剪模式一键启停，裁完直接保存，无需进菜单操作（`image_panel.py`、`window.py`）
+
+### 💎 代码质量
+
+- **移除 `QRubberBand` 依赖** — 裁剪模式完全由 `_CropOverlay（QWidget）` 接管，删除原裁剪鼠标事件分支（`image_panel.py`）
+- **信号接口** — `toggleCropRequested` / `saveRequested` 信号连接 window 裁剪/保存流程（`image_panel.py`、`window.py`）
+
+---
+
 ## 0.1.0（2026-06-25）
 
 ### ✨ 新功能

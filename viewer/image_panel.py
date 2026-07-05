@@ -1,21 +1,186 @@
 #author Red
 #260620 Red&小宋 RedGarph V0.0.1 — 图片渲染与交互
 
-from PyQt6.QtCore import Qt, QRectF, QRect, QPoint, QSize
+from PyQt6.QtCore import Qt, QRectF, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import (
     QPixmap, QPainter, QColor, QBrush, QTransform,
     QPen, QFont, QFontMetrics, QAction,
 )
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-    QLabel, QRubberBand, QApplication,
+    QLabel, QWidget, QApplication, QHBoxLayout, QPushButton,
 )
 
 from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
 
 
+class _CropOverlay(QWidget):
+    """裁剪选区覆盖层：暗化外部 + 选区边框 + 三分线 + 8 向调整手柄"""
+
+    _HS = 6       # 手柄半宽
+    _MIN = 30     # 选区最小尺寸
+
+    _CURSORS = {
+        'tl': Qt.CursorShape.SizeFDiagCursor,
+        'tr': Qt.CursorShape.SizeBDiagCursor,
+        'bl': Qt.CursorShape.SizeBDiagCursor,
+        'br': Qt.CursorShape.SizeFDiagCursor,
+        't':  Qt.CursorShape.SizeVerCursor,
+        'b':  Qt.CursorShape.SizeVerCursor,
+        'l':  Qt.CursorShape.SizeHorCursor,
+        'r':  Qt.CursorShape.SizeHorCursor,
+    }
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._rect = QRect()
+        self._state = 'idle'
+        self._start = QPoint()
+        self._snap = QRect()
+        self.setMouseTracking(True)
+        self.hide()
+
+    def selection_rect(self) -> QRect:
+        return self._rect if self._rect.isValid() else QRect()
+
+    def reset(self):
+        self._rect = QRect()
+        self._state = 'idle'
+
+    def _handles(self) -> dict[str, QRect]:
+        r = self._rect
+        if not r.isValid():
+            return {}
+        hs = self._HS
+        cx, cy = r.center().x(), r.center().y()
+        return {
+            'tl': QRect(r.left() - hs, r.top() - hs, 2 * hs, 2 * hs),
+            't':  QRect(cx - hs, r.top() - hs, 2 * hs, 2 * hs),
+            'tr': QRect(r.right() - hs, r.top() - hs, 2 * hs, 2 * hs),
+            'l':  QRect(r.left() - hs, cy - hs, 2 * hs, 2 * hs),
+            'r':  QRect(r.right() - hs, cy - hs, 2 * hs, 2 * hs),
+            'bl': QRect(r.left() - hs, r.bottom() - hs, 2 * hs, 2 * hs),
+            'b':  QRect(cx - hs, r.bottom() - hs, 2 * hs, 2 * hs),
+            'br': QRect(r.right() - hs, r.bottom() - hs, 2 * hs, 2 * hs),
+        }
+
+    def _handle_at(self, pos) -> str | None:
+        for name, h in self._handles().items():
+            if h.contains(pos):
+                return name
+        return None
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        r = self._rect
+
+        if r.isValid() and r.width() > 2 and r.height() > 2:
+            dark = QColor(0, 0, 0, 140)
+            p.fillRect(QRect(0, 0, w, r.top()), dark)
+            p.fillRect(QRect(0, r.bottom() + 1, w, h - r.bottom() - 1), dark)
+            p.fillRect(QRect(0, r.top(), r.left(), r.height()), dark)
+            p.fillRect(QRect(r.right() + 1, r.top(), w - r.right() - 1, r.height()), dark)
+        else:
+            p.fillRect(self.rect(), QColor(0, 0, 0, 80))
+            return
+
+        p.setPen(QPen(QColor(255, 255, 255), 1.5))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(r)
+
+        grid = QPen(QColor(255, 255, 255, 80), 0.5, Qt.PenStyle.DashLine)
+        p.setPen(grid)
+        for i in (1, 2):
+            x = int(r.left() + r.width() * i / 3)
+            y = int(r.top() + r.height() * i / 3)
+            p.drawLine(x, r.top(), x, r.bottom())
+            p.drawLine(r.left(), y, r.right(), y)
+
+        p.setPen(QPen(QColor(79, 195, 247), 1.5))
+        p.setBrush(QBrush(QColor(255, 255, 255)))
+        for hr in self._handles().values():
+            p.drawRect(hr)
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        pos = event.pos()
+
+        handle = self._handle_at(pos)
+        if handle:
+            self._state = handle
+            self._snap = QRect(self._rect)
+            return
+
+        if self._rect.contains(pos):
+            self._state = 'moving'
+            self._snap = QRect(self._rect)
+            self._start = pos
+            return
+
+        self._state = 'selecting'
+        self._start = pos
+        self._rect = QRect()
+
+    def mouseMoveEvent(self, event):
+        pos = event.pos()
+
+        if self._state == 'selecting':
+            self._rect = QRect(self._start, pos).normalized()
+
+        elif self._state == 'moving':
+            delta = pos - self._start
+            r2 = QRect(self._snap.topLeft() + delta, self._snap.size())
+            r2 = r2.intersected(self.rect().adjusted(0, 0, -1, -1))
+            if r2.width() >= self._MIN and r2.height() >= self._MIN:
+                self._rect = r2
+
+        elif self._state in self._CURSORS:
+            self._rect = self._resize_rect(pos)
+
+        else:
+            handle = self._handle_at(pos)
+            if handle:
+                self.setCursor(self._CURSORS[handle])
+            elif self._rect.contains(pos):
+                self.setCursor(Qt.CursorShape.SizeAllCursor)
+            else:
+                self.setCursor(Qt.CursorShape.CrossCursor)
+            return
+
+        self.update()
+
+    def _resize_rect(self, pos) -> QRect:
+        r = QRect(self._snap)
+        s = self._state
+        if 'l' in s:
+            r.setLeft(min(pos.x(), r.right() - self._MIN))
+        if 'r' in s:
+            r.setRight(max(pos.x(), r.left() + self._MIN))
+        if 't' in s:
+            r.setTop(min(pos.y(), r.bottom() - self._MIN))
+        if 'b' in s:
+            r.setBottom(max(pos.y(), r.top() + self._MIN))
+        return r.normalized()
+
+    def mouseReleaseEvent(self, event):
+        if self._state != 'idle':
+            self._state = 'idle'
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
 class ImagePanel(QGraphicsView):
     """图片显示区域：缩放、拖拽、旋转、裁剪、适应窗口"""
+
+    cropConfirmed = pyqtSignal()
+    cropCancelled = pyqtSignal()
+    toggleCropRequested = pyqtSignal()
+    saveRequested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -61,20 +226,50 @@ class ImagePanel(QGraphicsView):
         self._zoom_label.setContentsMargins(6, 4, 10, 6)
         self._zoom_label.setVisible(False)
 
+        # ── 底部工具栏（裁剪 / 保存） ──
+        self._bottom_toolbar = QWidget(self)
+        self._bottom_toolbar.setObjectName("bottomToolbar")
+        tb_layout = QHBoxLayout(self._bottom_toolbar)
+        tb_layout.setContentsMargins(0, 0, 0, 0)
+        tb_layout.setSpacing(6)
+
+        style_btn = (
+            "QPushButton { color: #90A4AE; background: rgba(255,255,255,0.06); "
+            "border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; "
+            "padding: 3px 10px; font: 12px; }"
+            "QPushButton:hover { color: #ECEFF1; background: rgba(255,255,255,0.14); }"
+        )
+
+        self._btn_toggle_crop = QPushButton("裁剪")
+        self._btn_toggle_crop.setObjectName("btnToggleCrop")
+        self._btn_toggle_crop.setCheckable(True)
+        self._btn_toggle_crop.setCursor(Qt.CursorShape.ArrowCursor)
+        self._btn_toggle_crop.setStyleSheet(
+            style_btn +
+            "QPushButton:checked { color: #4FC3F7; background: rgba(79,195,247,0.15); "
+            "border-color: #4FC3F7; }"
+        )
+        self._btn_toggle_crop.toggled.connect(self._on_toggle_crop)
+
+        self._btn_save = QPushButton("保存")
+        self._btn_save.setObjectName("btnSave")
+        self._btn_save.setCursor(Qt.CursorShape.ArrowCursor)
+        self._btn_save.setStyleSheet(style_btn)
+        self._btn_save.clicked.connect(self._emit_save)
+
+        tb_layout.addWidget(self._btn_toggle_crop)
+        tb_layout.addWidget(self._btn_save)
+        self._bottom_toolbar.adjustSize()
+        self._bottom_toolbar.hide()
+
         # ── 裁剪模式 ──
         self._crop_mode = False
-        self._crop_origin: QPoint | None = None
-        self._crop_rubber = QRubberBand(QRubberBand.Shape.Rectangle, self)
-        self._crop_rubber.hide()
-        self._crop_rubber.setStyleSheet(
-            "QRubberBand { border: 2px solid #4FC3F7; "
-            "background: rgba(79, 195, 247, 0.08); }"
-        )
+        self._crop_overlay = _CropOverlay(self.viewport())
 
         # ── 裁剪操作提示 ──
         self._crop_hint = QLabel(self)
         self._crop_hint.setObjectName("cropHint")
-        self._crop_hint.setText("点击拖拽选区 · Enter 确认 · Esc 取消")
+        self._crop_hint.setText("拖拽选区 · 调整边缘 · Enter 确认 · Esc 取消")
         self._crop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._crop_hint.setStyleSheet(
             "QLabel { color: #B0BEC5; font: 13px; "
@@ -83,6 +278,46 @@ class ImagePanel(QGraphicsView):
         )
         self._crop_hint.adjustSize()
         self._crop_hint.hide()
+
+        # ── 裁剪操作按钮 ──
+        self._crop_btn_bar = QWidget(self)
+        self._crop_btn_bar.setObjectName("cropBtnBar")
+        self._crop_btn_bar.setStyleSheet(
+            "QWidget#cropBtnBar { background: rgba(0,0,0,0.65); "
+            "border-radius: 6px; }"
+        )
+        self._crop_btn_bar.setFixedHeight(44)
+        bar_layout = QHBoxLayout(self._crop_btn_bar)
+        bar_layout.setContentsMargins(12, 6, 12, 6)
+        bar_layout.setSpacing(10)
+
+        self._btn_crop_apply = QPushButton("确认裁剪")
+        self._btn_crop_apply.setObjectName("cropApplyBtn")
+        self._btn_crop_apply.setCursor(Qt.CursorShape.ArrowCursor)
+        self._btn_crop_apply.setStyleSheet(
+            "QPushButton { color: #fff; background: #1976D2; "
+            "border: none; border-radius: 4px; padding: 4px 16px; "
+            "font: 13px; min-width: 80px; }"
+            "QPushButton:hover { background: #2196F3; }"
+            "QPushButton:pressed { background: #1565C0; }"
+        )
+        self._btn_crop_apply.clicked.connect(self.apply_crop)
+
+        self._btn_crop_cancel = QPushButton("取消")
+        self._btn_crop_cancel.setObjectName("cropCancelBtn")
+        self._btn_crop_cancel.setCursor(Qt.CursorShape.ArrowCursor)
+        self._btn_crop_cancel.setStyleSheet(
+            "QPushButton { color: #ccc; background: rgba(255,255,255,0.08); "
+            "border: none; border-radius: 4px; padding: 4px 16px; "
+            "font: 13px; min-width: 80px; }"
+            "QPushButton:hover { color: #fff; background: rgba(255,255,255,0.15); }"
+            "QPushButton:pressed { background: rgba(255,255,255,0.05); }"
+        )
+        self._btn_crop_cancel.clicked.connect(self.cancel_crop)
+
+        bar_layout.addWidget(self._btn_crop_apply)
+        bar_layout.addWidget(self._btn_crop_cancel)
+        self._crop_btn_bar.hide()
 
     # ── 图片加载 ──
 
@@ -197,11 +432,13 @@ class ImagePanel(QGraphicsView):
         self.setResizeAnchor(old_rx)
 
         self._update_zoom_label()
+        self._bottom_toolbar.show()
 
     def _update_zoom_label(self):
-        """更新右下角缩放比例指示器"""
+        """更新右下角缩放比例指示器 + 工具栏定位"""
         if self._source.isNull():
             self._zoom_label.setVisible(False)
+            self._bottom_toolbar.hide()
             return
         if self._zoom is None:
             text = "适应窗口"
@@ -211,13 +448,20 @@ class ImagePanel(QGraphicsView):
         self._zoom_label.setText(text)
         self._zoom_label.setVisible(True)
         self._zoom_label.adjustSize()
-        # 定位到右下角
+        # 定位缩放标签到右下角
         margins = self._zoom_label.contentsMargins()
         lw = self._zoom_label.width() + margins.left() + margins.right() + 10
         lh = self._zoom_label.height() + margins.top() + margins.bottom() + 6
-        self._zoom_label.move(
-            self.width() - lw - 8,
-            self.height() - lh - 8,
+        zx = self.width() - lw - 8
+        zy = self.height() - lh - 8
+        self._zoom_label.move(zx, zy)
+        # 工具栏放在缩放标签左边
+        self._bottom_toolbar.adjustSize()
+        tw = self._bottom_toolbar.width()
+        th = self._bottom_toolbar.height()
+        self._bottom_toolbar.move(
+            zx - tw - 8,
+            zy + (lh - th) // 2,
         )
 
     def resizeEvent(self, event):
@@ -232,10 +476,15 @@ class ImagePanel(QGraphicsView):
             self.setTransformationAnchor(old_tx)
             self.setResizeAnchor(old_rx)
         self._update_zoom_label()
-        # 裁剪模式下重定位提示
-        if self._crop_mode and self._crop_hint.isVisible():
-            cx = (self.width() - self._crop_hint.width()) // 2
-            self._crop_hint.move(cx, 20)
+        # 裁剪模式下更新叠加层和提示
+        if self._crop_mode:
+            self._crop_overlay.setGeometry(self.viewport().rect())
+            if self._crop_hint.isVisible():
+                cx = (self.width() - self._crop_hint.width()) // 2
+                self._crop_hint.move(cx, 20)
+            if self._crop_btn_bar.isVisible():
+                bx = (self.width() - self._crop_btn_bar.width()) // 2
+                self._crop_btn_bar.move(bx, self.height() - self._crop_btn_bar.height() - 20)
 
     # ── 鼠标滚轮缩放 ──
 
@@ -285,34 +534,51 @@ class ImagePanel(QGraphicsView):
         self._crop_mode = True
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self._crop_origin = None
-        self._crop_rubber.hide()
+        self._crop_overlay.reset()
+        self._crop_overlay.setGeometry(self.viewport().rect())
+        self._crop_overlay.show()
+        self._crop_overlay.raise_()
+        # 同步工具栏按钮
+        self._btn_toggle_crop.blockSignals(True)
+        self._btn_toggle_crop.setChecked(True)
+        self._btn_toggle_crop.blockSignals(False)
         # 提示居中显示
         self._crop_hint.adjustSize()
         cx = (self.width() - self._crop_hint.width()) // 2
         self._crop_hint.move(cx, 20)
         self._crop_hint.show()
+        # 按钮栏居中显示
+        self._crop_btn_bar.adjustSize()
+        bx = (self.width() - self._crop_btn_bar.width()) // 2
+        self._crop_btn_bar.move(bx, self.height() - self._crop_btn_bar.height() - 20)
+        self._crop_btn_bar.show()
 
     def exit_crop_mode(self, apply: bool = False):
         """退出裁剪模式"""
         self._crop_mode = False
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self._crop_rubber.hide()
+        # 同步工具栏按钮
+        self._btn_toggle_crop.blockSignals(True)
+        self._btn_toggle_crop.setChecked(False)
+        self._btn_toggle_crop.blockSignals(False)
+        self._crop_overlay.hide()
         self._crop_hint.hide()
-        self._crop_origin = None
+        self._crop_btn_bar.hide()
         if apply and not self._source.isNull():
-            rect = self._crop_rubber.geometry()
+            rect = self._crop_overlay.selection_rect()
             if rect.width() > 4 and rect.height() > 4:
                 self._do_crop(rect)
 
     def cancel_crop(self):
         """取消裁剪并退出裁剪模式"""
         self.exit_crop_mode(apply=False)
+        self.cropCancelled.emit()
 
     def apply_crop(self):
         """确认裁剪"""
         self.exit_crop_mode(apply=True)
+        self.cropConfirmed.emit()
 
     def _do_crop(self, viewport_rect: QRect):
         """执行裁剪"""
@@ -354,28 +620,13 @@ class ImagePanel(QGraphicsView):
         self._zoom = None
         self._refresh()
 
+    # ── 底部工具栏事件 ──
+
+    def _on_toggle_crop(self, checked):
+        self.toggleCropRequested.emit()
+
+    def _emit_save(self):
+        self.saveRequested.emit()
+
     # ── 裁剪模式鼠标事件 ──
-
-    def mousePressEvent(self, event):
-        if self._crop_mode and event.button() == Qt.MouseButton.LeftButton:
-            self._crop_origin = event.pos()
-            self._crop_rubber.setGeometry(QRect(self._crop_origin, QSize()))
-            self._crop_rubber.show()
-            event.accept()
-            return
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._crop_mode and self._crop_origin is not None:
-            rect = QRect(self._crop_origin, event.pos()).normalized()
-            self._crop_rubber.setGeometry(rect)
-            event.accept()
-            return
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if self._crop_mode:
-            # 裁剪框画完，等待 Enter / Esc
-            event.accept()
-            return
-        super().mouseReleaseEvent(event)
+    # 由 _CropOverlay 覆盖层全权处理，ImagePanel 不再拦截

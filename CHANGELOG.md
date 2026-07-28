@@ -1,5 +1,24 @@
 # RedGarph 更新日志
 
+## 0.1.2（2026-07-28）
+
+### 🐛 修复
+
+- **窗口无图标** — `main.py` 增加 `_resource_path()` 兼容源码/PyInstaller 资源路径，`QApplication.setWindowIcon()` 设置标题栏与任务栏图标（`main.py`）
+- **`_edge_overlay` 重复创建** — `_build_ui` 移除第一次无用的 `_EdgeOverlay(central, self)` 实例，只保留悬浮层实例（`viewer/window.py`）
+
+### ⚡ 优化
+
+- **启动速度** — 移除 `_build_ui` 中 8 条带 `flush=True` 的 debug print，减少 Windows 控制台 I/O 阻塞（`viewer/window.py`）
+- **图片翻页卡顿** — `ImagePanel` 增加 LRU pixmap 缓存（容量 20），翻页时命中缓存直接显示，跳过磁盘解码（`viewer/image_panel.py`）
+- **首屏响应** — 命令行参数加载改用 `QTimer.singleShot(0)` 延迟，`_load_current` 增加 `processEvents()`，确保窗口先 paint 再解码大图（`main.py`、`viewer/window.py`）
+
+### 🛠 构建
+
+- **PyInstaller 资源打包** — `build.bat` / `build_debug.bat` 增加 `--add-data "resources\icon.ico;resources"`，frozen 模式下运行时能正确读取资源文件
+
+---
+
 ## 0.1.1（2026-07-05）
 
 ### ✨ 新功能

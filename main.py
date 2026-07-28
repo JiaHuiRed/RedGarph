@@ -7,7 +7,7 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtCore import Qt, qInstallMessageHandler
+from PyQt6.QtCore import Qt, qInstallMessageHandler, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from viewer.window import MainWindow
@@ -20,6 +20,15 @@ else:
     LOG_DIR = Path(__file__).resolve().parent
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "crash.log"
+
+
+def _resource_path(relative: str) -> Path:
+    """兼容源码运行和 PyInstaller onefile 的资源路径"""
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", "") or Path(sys.argv[0]).resolve().parent)
+    else:
+        base = Path(__file__).resolve().parent
+    return base / relative
 
 
 def _log(msg: str):
@@ -56,15 +65,21 @@ def main():
         app.setApplicationName("RedGarph")
         app.setOrganizationName("RedStudio")
 
+        # 设置窗口图标（标题栏 + 任务栏）
+        icon_path = _resource_path("resources" / "icon.ico")
+        if icon_path.exists():
+            from PyQt6.QtGui import QIcon
+            app.setWindowIcon(QIcon(str(icon_path)))
+
         win = MainWindow(theme="night")
         win.show()
 
-        # 处理命令行参数
+        # 处理命令行参数（延迟到事件循环首轮，确保窗口先 show 出来）
         args = sys.argv[1:]
         if args:
             p = Path(args[0])
             if p.exists():
-                win.load_path(p)
+                QTimer.singleShot(0, lambda: win.load_path(p))
 
         sys.exit(app.exec())
     except Exception:

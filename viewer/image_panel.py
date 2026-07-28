@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
     QLabel, QWidget, QApplication, QHBoxLayout, QPushButton,
 )
+from collections import OrderedDict
 
 from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
 
@@ -196,6 +197,10 @@ class ImagePanel(QGraphicsView):
         self._zoom: float | None = None   # None = 适应窗口模式
         self._rotation = 0          # 0/90/180/270
 
+        # ── 图片缓存（LRU，避免翻页时重复解码） ──
+        self._cache: OrderedDict[str, QPixmap] = OrderedDict()
+        self._cache_max = 20
+
         # ── 渲染设置 ──
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -323,9 +328,31 @@ class ImagePanel(QGraphicsView):
 
     def load_image(self, path: str) -> bool:
         """加载图片，适应窗口显示"""
+        if not path:
+            self._source = QPixmap()
+            self._rotation = 0
+            self._zoom = None
+            self._refresh()
+            return True
+
+        # 缓存命中：直接使用内存中的 pixmap，跳过磁盘解码
+        if path in self._cache:
+            self._source = self._cache[path]
+            self._cache.move_to_end(path)
+            self._rotation = 0
+            self._zoom = None
+            self._refresh()
+            return True
+
         pix = QPixmap(path)
         if pix.isNull():
             return False
+
+        # 写入 LRU 缓存
+        self._cache[path] = pix
+        if len(self._cache) > self._cache_max:
+            self._cache.popitem(last=False)
+
         self._source = pix
         self._rotation = 0
         self._zoom = None

@@ -649,16 +649,9 @@ class MainWindow(QMainWindow):
 
         """构建主布局：水平分割 = [缩略图面板 | 图片区域]"""
 
-        print("[DEBUG] _build_ui start", flush=True)
         central = QWidget()
 
         self.setCentralWidget(central)
-
-        # 边缘缩放遮罩，父控件为 central，放进布局最上层
-        self._edge_overlay = _EdgeOverlay(central, self)
-        print("[DEBUG] central widget set", flush=True)
-
-
 
         root = QVBoxLayout(central)
 
@@ -667,16 +660,12 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
 
 
-
         root.addWidget(self.titlebar)
-        print("[DEBUG] titlebar added", flush=True)
-
 
 
         # ── 水平分割：图片区域 | EXIF 面板 ──
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        print("[DEBUG] splitter created", flush=True)
 
         splitter.setObjectName("MainSplitter")
 
@@ -712,7 +701,6 @@ class MainWindow(QMainWindow):
 
         splitter.addWidget(self.exif_panel)
 
-        print("[DEBUG] before setSizes", flush=True)
         splitter.setSizes([
 
             WINDOW_WIDTH - ExifPanel.PANEL_WIDTH,
@@ -720,7 +708,6 @@ class MainWindow(QMainWindow):
             ExifPanel.PANEL_WIDTH,
 
         ])
-        print("[DEBUG] after setSizes", flush=True)
         splitter.setCollapsible(0, False)
 
         splitter.setCollapsible(1, False)
@@ -737,8 +724,6 @@ class MainWindow(QMainWindow):
         self._edge_overlay.setGeometry(self.centralWidget().geometry())
         self._edge_overlay.show()
         self._edge_overlay.raise_()
-        print("[DEBUG] edge overlay added", flush=True)
-        print("[DEBUG] edge overlay added", flush=True)
 
 
 
@@ -859,6 +844,9 @@ class MainWindow(QMainWindow):
             return
 
         self._current_path = path
+
+        # 先让窗口刷新一帧，再阻塞式解码图片，避免界面卡死感
+        QApplication.processEvents()
 
         self.image_panel.load_image(str(path))
 

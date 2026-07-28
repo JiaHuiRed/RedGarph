@@ -16,7 +16,7 @@ if %errorlevel% neq 0 (
 for /f "delims=" %%v in ('python -c "import sys; sys.path.insert(0, '.'); from viewer.constants import APP_VERSION; print(APP_VERSION)"') do set APP_VERSION=%%v
 
 echo Building RedGarph V%APP_VERSION%...
-pyinstaller --onefile --windowed --name "RedGarph" --icon resources\icon.ico --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
+pyinstaller --onefile --windowed --name "RedGarph" --icon resources\icon.ico --add-data "resources\icon.ico;resources" --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
 
 if %errorlevel% equ 0 (
     echo.

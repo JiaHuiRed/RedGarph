@@ -425,6 +425,8 @@ class MainWindow(QMainWindow):
 
         self.slideshow = Slideshow(self)
 
+        self._slideshow_interval = SLIDESHOW_INTERVAL
+
         self.image_panel = ImagePanel()
 
         self.info_bar = InfoBar()
@@ -737,10 +739,24 @@ class MainWindow(QMainWindow):
 
         self.slideshow.nextRequested.connect(self._slideshow_next)
 
+        self.slideshow.intervalChanged.connect(self._on_slideshow_interval_changed)
+
         self.image_panel.cropConfirmed.connect(lambda: self._act_crop.setChecked(False))
+
         self.image_panel.cropCancelled.connect(lambda: self._act_crop.setChecked(False))
+
         self.image_panel.toggleCropRequested.connect(self._toggle_crop)
+
         self.image_panel.saveRequested.connect(self._save_image)
+
+
+    def _on_slideshow_interval_changed(self, sec: int):
+
+        self._slideshow_interval = sec
+
+        self.info_bar.show_info(
+            self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
+        )
 
 
     # ── 文件操作 ──
@@ -1265,6 +1281,24 @@ class MainWindow(QMainWindow):
             self.showMaximized()
 
 
+
+    def changeEvent(self, event):
+
+        """进入/退出全屏时统一管理标题栏显隐"""
+
+        if event.type() == event.Type.WindowStateChange:
+
+            if self.isFullScreen():
+
+                self.titlebar.setVisible(False)
+
+            else:
+
+                self.titlebar.setVisible(True)
+
+        super().changeEvent(event)
+
+
     # ── 拖拽 ──
 
 
@@ -1325,22 +1359,15 @@ class MainWindow(QMainWindow):
 
         if key == Qt.Key.Key_Escape:
 
-
-
             if self.image_panel.is_crop_mode:
-
-
 
                 self.image_panel.cancel_crop()
 
 
-            elif self.isFullScreen():
 
-
+            if self.isFullScreen():
 
                 self.showNormal()
-
-
 
                 self.titlebar.setVisible(True)
 
@@ -1348,11 +1375,7 @@ class MainWindow(QMainWindow):
 
             if self.slideshow.is_active:
 
-
-
                 self.slideshow.stop()
-
-
 
                 self._act_slideshow.setChecked(False)
 
@@ -1419,6 +1442,22 @@ class MainWindow(QMainWindow):
 
 
             self.file_list.next_image()
+
+
+
+        # [ 减少间隔
+
+        if key == Qt.Key.Key_BracketLeft:
+
+            self.slideshow.interval = max(1, self._slideshow_interval - 1)
+
+
+
+        # ] 增加间隔
+
+        elif key == Qt.Key.Key_BracketRight:
+
+            self.slideshow.interval = min(60, self._slideshow_interval + 1)
 
 
 

@@ -1,5 +1,19 @@
 # RedGarph 更新日志
 
+## 0.1.3（2026-07-29）
+
+> 全屏标题栏自动显隐 + 幻灯片间隔快捷键
+
+#### 修复
+
+- **全屏标题栏自动显隐** — 新增 `changeEvent` 统一管理，进入/退出全屏时自动显示/隐藏自定义标题栏；修正 Esc 键独立执行，避免 `elif` 导致幻灯片不停止（`viewer/window.py`）
+
+#### 新增
+
+- **幻灯片间隔快捷键** — `[` 减少 1 秒、`]` 增加 1 秒（范围 1-60 秒），`Slideshow` 新增 `intervalChanged` 信号，`InfoBar` 显示当前间隔（`viewer/slideshow.py`、`viewer/window.py`、`viewer/info_bar.py`）
+
+---
+
 ## 0.1.2（2026-07-28）
 
 ### 🐛 修复
@@ -12,6 +26,11 @@
 - **启动速度** — 移除 `_build_ui` 中 8 条带 `flush=True` 的 debug print，减少 Windows 控制台 I/O 阻塞（`viewer/window.py`）
 - **图片翻页卡顿** — `ImagePanel` 增加 LRU pixmap 缓存（容量 20），翻页时命中缓存直接显示，跳过磁盘解码（`viewer/image_panel.py`）
 - **首屏响应** — 命令行参数加载改用 `QTimer.singleShot(0)` 延迟，`_load_current` 增加 `processEvents()`，确保窗口先 paint 再解码大图（`main.py`、`viewer/window.py`）
+
+### ✨ 新功能
+
+- **全屏标题栏自动显隐** — 新增 `changeEvent` 统一管理，进入/退出全屏时自动显示/隐藏自定义标题栏；修正 Esc 键独立执行，避免 `elif` 导致幻灯片不停止（`viewer/window.py`）
+- **幻灯片间隔快捷键** — `[` 减少 1 秒、`]` 增加 1 秒（范围 1-60 秒），`Slideshow` 新增 `intervalChanged` 信号，`InfoBar` 显示当前间隔（`viewer/slideshow.py`、`viewer/window.py`、`viewer/info_bar.py`）
 
 ### 🛠 构建
 

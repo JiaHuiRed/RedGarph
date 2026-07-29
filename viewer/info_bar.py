@@ -29,19 +29,28 @@ class InfoBar(QWidget):
             QSizePolicy.Policy.Minimum,
         )
 
-    def show_info(self, path: Path | None, pixmap: QPixmap | None = None):
+    def show_info(self, path: Path | None, pixmap: QPixmap | None = None, extra: str = ""):
+
         if not path:
-            self._label.setText("")
+
+            self._label.setText(extra)
+
             return
 
         name = path.name
         size_str = _format_size(path.stat().st_size)
 
         if pixmap and not pixmap.isNull():
+
             dim = f"{pixmap.width()} × {pixmap.height()}"
-            self._label.setText(f"{name}  —  {dim}  —  {size_str}")
+
+            base = f"{name}  —  {dim}  —  {size_str}"
+
         else:
-            self._label.setText(f"{name}  —  {size_str}")
+
+            base = f"{name}  —  {size_str}"
+
+        self._label.setText(f"{extra}  {base}" if extra else base)
 
     def show_page(self, index: int, total: int):
         """追加页码信息（不覆盖已设置的内容）"""

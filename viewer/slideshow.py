@@ -11,6 +11,8 @@ class Slideshow(QObject):
 
     nextRequested = pyqtSignal()
 
+    intervalChanged = pyqtSignal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._timer = QTimer(self)
@@ -30,6 +32,7 @@ class Slideshow(QObject):
         self._interval = max(1, sec)
         if self._timer.isActive():
             self._timer.start(self._interval * 1000)
+        self.intervalChanged.emit(self._interval)
 
     def start(self, interval: int | None = None):
         if interval is not None:

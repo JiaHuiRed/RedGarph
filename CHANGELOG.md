@@ -1,5 +1,23 @@
 # RedGarph 更新日志
 
+## 0.1.5（2026-07-29）
+
+> 修复启动崩溃 + 构建脚本统一 + 版本检查
+
+#### 修复
+- **启动崩溃** — `main.py` 修复 icon path `TypeError`：`_resource_path("resources" / "icon.ico")` 改为 `_resource_path(Path("resources") / "icon.ico")`（`main.py`）
+- **导入缺失** — `viewer/window.py` 补充 `SLIDESHOW_INTERVAL` import，修复打开图片时 `NameError`（`viewer/window.py`）
+
+#### 重构
+- **构建脚本统一** — 抽取 `build_common.bat`，`build.bat` / `build_debug.bat` 改为 thin wrapper，避免双份维护（`build.bat`、`build_debug.bat`、`build_common.bat`）
+- **原生文件对话框** — 移除 `QFileDialog.Option.DontUseNativeDialog`，恢复 Windows 原生打开/保存对话框（`viewer/window.py`）
+
+#### 构建
+- **版本一致性检查** — 构建前自动校验 `viewer/constants.py`、`CHANGELOG.md`、`README.md` 版本是否一致，不一致则中止（`scripts/check_version.py`、`build_common.bat`）
+- **产物清理** — 无论构建成功失败，均清理 `build/` 和 `.spec` 文件，避免残留干扰下次构建（`build_common.bat`）
+
+---
+
 ## 0.1.4（2026-07-29）
 
 > 全屏顶部悬停标题栏 + 幻灯片间隔调节 UI

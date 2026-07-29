@@ -2,15 +2,11 @@
 
 #260620 Red&小宋 RedGarph V0.0.1 — 主窗口（图片 + EXIF 信息面板）
 
-
-
 import ctypes
 import ctypes.wintypes  # 确保 PyInstaller 打包时包含该模块
 import subprocess
 
 from pathlib import Path
-
-
 
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
 
@@ -20,21 +16,13 @@ from PyQt6.QtGui import (
 )
 
 from PyQt6.QtWidgets import (
-
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-
     QPushButton, QLabel, QFileDialog, QMenu, QApplication,
-
     QMessageBox, QSplitter, QInputDialog,
-
 )
 
-
-
 from .constants import (
-
     APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT, IMAGE_EXTENSIONS,
-
 )
 
 from .theme import apply_theme, THEMES, THEME_LABELS
@@ -49,8 +37,6 @@ from .slideshow import Slideshow
 
 from .exif_panel import ExifPanel
 
-
-
 RESIZE_MARGIN = 6
 
 TITLEBAR_HEIGHT = 34
@@ -58,8 +44,6 @@ TITLEBAR_HEIGHT = 34
 TRAFFIC_SIZE = 12
 
 TRAFFIC_MARGIN = 8
-
-
 
 # ── macOS 交通灯颜色 ──
 
@@ -69,23 +53,15 @@ COLOR_MINIMIZE = "#ffbd2e"
 
 COLOR_MAXIMIZE = "#27c93f"
 
-
-
-
-
 # ═══════════════════════════════════════════
 
 # ── 交通灯按钮 ──
 
 # ═══════════════════════════════════════════
 
-
-
 class TrafficButton(QPushButton):
 
     """纯色圆点交通灯按钮"""
-
-
 
     def __init__(self, color: str):
 
@@ -96,8 +72,6 @@ class TrafficButton(QPushButton):
         self.setFixedSize(TRAFFIC_SIZE, TRAFFIC_SIZE)
 
         self.setCursor(Qt.CursorShape.ArrowCursor)
-
-
 
     def paintEvent(self, event):
 
@@ -113,31 +87,19 @@ class TrafficButton(QPushButton):
 
         p.end()
 
-
-
-
-
 # ═══════════════════════════════════════════
-
 # ── macOS 风格标题栏 ──
-
 # ═══════════════════════════════════════════
-
-
 
 class TitleBar(QWidget):
 
     """自定义标题栏：交通灯 + 标题 + 拖拽移动"""
-
-
 
     close_clicked = pyqtSignal()
 
     minimize_clicked = pyqtSignal()
 
     maximize_clicked = pyqtSignal()
-
-
 
     def __init__(self, title: str = "RedGarph", version: str = "", parent=None):
 
@@ -147,13 +109,87 @@ class TitleBar(QWidget):
 
         self.setFixedHeight(TITLEBAR_HEIGHT)
 
-
-
         self._drag_pos = QPoint()
 
         self._dragging = False
 
+        layout = QHBoxLayout(self)
 
+        layout.setContentsMargins(TRAFFIC_MARGIN, 0, TRAFFIC_MARGIN, 0)
+
+        layout.setSpacing(TRAFFIC_MARGIN)
+
+        layout.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        # ── 交通灯 ──
+
+        self.btn_close = TrafficButton(COLOR_CLOSE)
+
+        self.btn_min = TrafficButton(COLOR_MINIMIZE)
+
+        self.btn_max = TrafficButton(COLOR_MAXIMIZE)
+
+        self.btn_close.clicked.connect(self.close_clicked.emit)
+
+        self.btn_min.clicked.connect(self.minimize_clicked.emit)
+
+        self.btn_max.clicked.connect(self.maximize_clicked.emit)
+
+        layout.addWidget(self.btn_close)
+
+        layout.addWidget(self.btn_min)
+
+        layout.addWidget(self.btn_max)
+
+        # ── 版本号 ──
+
+        if version:
+
+            ver_label = QLabel(f"v{version}")
+
+            ver_label.setObjectName("verLabel")
+
+            layout.addWidget(ver_label)
+
+        # ── 标题 ──
+
+        self.title_label = QLabel(title)
+
+        self.title_label.setObjectName("titleLabel")
+
+        layout.addSpacing(12)
+
+        layout.addWidget(self.title_label, 1, Qt.AlignmentFlag.AlignLeft)
+
+# ═══════════════════════════════════════════
+
+# ── macOS 风格标题栏 ──
+
+# ═══════════════════════════════════════════
+
+class TitleBar(QWidget):
+
+    """自定义标题栏：交通灯 + 标题 + 拖拽移动"""
+
+    close_clicked = pyqtSignal()
+
+    minimize_clicked = pyqtSignal()
+
+    maximize_clicked = pyqtSignal()
+
+    def __init__(self, title: str = "RedGarph", version: str = "", parent=None):
+
+        super().__init__(parent)
+
+        self.setObjectName("titleBar")
+
+        self.setFixedHeight(TITLEBAR_HEIGHT)
+
+        self._drag_pos = QPoint()
+
+        self._dragging = False
 
         layout = QHBoxLayout(self)
 
@@ -167,8 +203,6 @@ class TitleBar(QWidget):
 
         )
 
-
-
         # ── 交通灯 ──
 
         self.btn_close = TrafficButton(COLOR_CLOSE)
@@ -177,23 +211,17 @@ class TitleBar(QWidget):
 
         self.btn_max = TrafficButton(COLOR_MAXIMIZE)
 
-
-
         self.btn_close.clicked.connect(self.close_clicked.emit)
 
         self.btn_min.clicked.connect(self.minimize_clicked.emit)
 
         self.btn_max.clicked.connect(self.maximize_clicked.emit)
 
-
-
         layout.addWidget(self.btn_close)
 
         layout.addWidget(self.btn_min)
 
         layout.addWidget(self.btn_max)
-
-
 
         # ── 版本号 ──
 
@@ -205,8 +233,6 @@ class TitleBar(QWidget):
 
             layout.addWidget(ver_label)
 
-
-
         # ── 标题 ──
 
         self.title_label = QLabel(title)
@@ -217,17 +243,11 @@ class TitleBar(QWidget):
 
         layout.addWidget(self.title_label, 1, Qt.AlignmentFlag.AlignLeft)
 
-
-
     def set_title(self, text: str):
 
         self.title_label.setText(text)
 
-
-
     # ── 窗口拖拽 ──
-
-
 
     def mousePressEvent(self, event):
 
@@ -238,8 +258,6 @@ class TitleBar(QWidget):
             self._dragging = True
 
             event.accept()
-
-
 
     def mouseMoveEvent(self, event):
 
@@ -259,8 +277,6 @@ class TitleBar(QWidget):
 
             event.accept()
 
-
-
     def mouseReleaseEvent(self, event):
 
         if event.button() == Qt.MouseButton.LeftButton:
@@ -268,8 +284,6 @@ class TitleBar(QWidget):
             self._dragging = False
 
             event.accept()
-
-
 
     def mouseDoubleClickEvent(self, event):
 
@@ -279,14 +293,9 @@ class TitleBar(QWidget):
 
             event.accept()
 
-
-
-
-
 # ═══════════════════════════════════════════
 # ── 边缘缩放遮罩 ──
 # ═══════════════════════════════════════════
-
 
 class _EdgeOverlay(QWidget):
     """透明遮罩层：只保留边缘 MARGIN 环响应鼠标，中间区域透传事件"""
@@ -379,17 +388,13 @@ class _EdgeOverlay(QWidget):
             return
         super().mouseReleaseEvent(e)
 
-
 # ═══════════════════════════════════════════
 # ── 主窗口 ──
 # ═══════════════════════════════════════════
 
-
 class MainWindow(QMainWindow):
 
     """图片查看器：无框窗口 + 图片区域 + EXIF 信息面板"""
-
-
 
     def __init__(self, theme: str = "night"):
 
@@ -398,8 +403,6 @@ class MainWindow(QMainWindow):
         self._theme = theme
 
         self._current_path: Path | None = None
-
-
 
         # ── 无框窗口 ──
 
@@ -413,11 +416,7 @@ class MainWindow(QMainWindow):
 
         self.setMouseTracking(True)
 
-
-
         apply_theme(self._theme)
-
-
 
         # ── 组件 ──
 
@@ -439,7 +438,6 @@ class MainWindow(QMainWindow):
 
         self.exif_panel = ExifPanel()
 
-
         self._build_titlebar()
 
         self._build_ui()
@@ -450,8 +448,6 @@ class MainWindow(QMainWindow):
         self.winId()
 
     # ── 构建 UI ──
-
-
 
     def _build_titlebar(self):
 
@@ -465,8 +461,6 @@ class MainWindow(QMainWindow):
 
         self.titlebar.maximize_clicked.connect(self._toggle_maximize)
 
-
-
         # ── 菜单按钮 ──
 
         menu_btn = QPushButton("☰")
@@ -479,11 +473,7 @@ class MainWindow(QMainWindow):
 
         menu_btn.setFlat(True)
 
-
-
         menu = QMenu(menu_btn)
-
-
 
         # 文件
 
@@ -491,11 +481,7 @@ class MainWindow(QMainWindow):
         act_open.triggered.connect(self._open_folder)
         menu.addAction(act_open)
 
-
-
         menu.addSeparator()
-
-
 
         # 保存
 
@@ -503,17 +489,11 @@ class MainWindow(QMainWindow):
         act_save.triggered.connect(self._save_image)
         menu.addAction(act_save)
 
-
-
         act_save_as = QAction("另存为...", self)
         act_save_as.triggered.connect(self._save_image_as)
         menu.addAction(act_save_as)
 
-
-
         menu.addSeparator()
-
-
 
         # 复制
 
@@ -521,11 +501,7 @@ class MainWindow(QMainWindow):
         act_copy.triggered.connect(self._copy_to_clipboard)
         menu.addAction(act_copy)
 
-
-
         menu.addSeparator()
-
-
 
         # 文件操作
 
@@ -533,17 +509,11 @@ class MainWindow(QMainWindow):
         act_show.triggered.connect(self._show_in_explorer)
         menu.addAction(act_show)
 
-
-
         act_delete = QAction("删除到回收站", self)
         act_delete.triggered.connect(self._delete_current)
         menu.addAction(act_delete)
 
-
-
         menu.addSeparator()
-
-
 
         # 幻灯片
 
@@ -558,16 +528,12 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
-
-
         # EXIF 信息面板
 
         self._act_exif = QAction("EXIF 信息", self)
         self._act_exif.setCheckable(True)
         self._act_exif.triggered.connect(self._toggle_exif)
         menu.addAction(self._act_exif)
-
-
 
         # 显示信息
 
@@ -576,11 +542,7 @@ class MainWindow(QMainWindow):
         self._act_info.triggered.connect(self._toggle_info)
         menu.addAction(self._act_info)
 
-
-
         menu.addSeparator()
-
-
 
         # 裁剪模式
 
@@ -589,11 +551,7 @@ class MainWindow(QMainWindow):
         self._act_crop.triggered.connect(self._toggle_crop)
         menu.addAction(self._act_crop)
 
-
-
         menu.addSeparator()
-
-
 
         # 主题
 
@@ -615,11 +573,7 @@ class MainWindow(QMainWindow):
 
             self._theme_actions[name] = act
 
-
-
         menu.addSeparator()
-
-
 
         act_about = QAction("关于 RedGarph", self)
 
@@ -627,17 +581,11 @@ class MainWindow(QMainWindow):
 
         menu.addAction(act_about)
 
-
-
         menu.addSeparator()
-
-
 
         act_quit = QAction("退出", self)
         act_quit.triggered.connect(self.close)
         menu.addAction(act_quit)
-
-
 
         menu_btn.setMenu(menu)
 
@@ -653,8 +601,6 @@ class MainWindow(QMainWindow):
 
         self.titlebar.layout().addWidget(menu_btn)
 
-
-
     def _build_ui(self):
 
         """构建主布局：水平分割 = [缩略图面板 | 图片区域]"""
@@ -669,9 +615,7 @@ class MainWindow(QMainWindow):
 
         root.setSpacing(0)
 
-
         root.addWidget(self.titlebar)
-
 
         # ── 水平分割：图片区域 | EXIF 面板 ──
 
@@ -682,8 +626,6 @@ class MainWindow(QMainWindow):
         splitter.setHandleWidth(1)
 
         splitter.setChildrenCollapsible(False)
-
-
 
         # 图片区域
 
@@ -699,13 +641,9 @@ class MainWindow(QMainWindow):
 
         image_layout.addWidget(self.image_panel, 1)
 
-
-
         # 信息栏覆盖在图片区域底部
 
         self.info_bar.setParent(self.image_panel)
-
-
 
         splitter.addWidget(image_area)
 
@@ -722,11 +660,7 @@ class MainWindow(QMainWindow):
 
         splitter.setCollapsible(1, False)
 
-
-
         root.addWidget(splitter, 1)
-
-
 
         # 边缘缩放遮罩（独立悬浮层，不占 layout 空间）
 
@@ -734,8 +668,6 @@ class MainWindow(QMainWindow):
         self._edge_overlay.setGeometry(self.centralWidget().geometry())
         self._edge_overlay.show()
         self._edge_overlay.raise_()
-
-
 
     def _connect_signals(self):
 
@@ -757,7 +689,6 @@ class MainWindow(QMainWindow):
 
         self.image_panel.saveRequested.connect(self._save_image)
 
-
     def _on_slideshow_interval_changed(self, sec: int):
 
         self._slideshow_interval = sec
@@ -766,10 +697,7 @@ class MainWindow(QMainWindow):
             self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
         )
 
-
     # ── 文件操作 ──
-
-
 
     def _open_folder(self):
 
@@ -794,8 +722,6 @@ class MainWindow(QMainWindow):
         else:
 
             QMessageBox.information(self, "提示", "文件夹中没有找到图片")
-
-
 
     def load_path(self, path: str | Path):
 
@@ -827,11 +753,7 @@ class MainWindow(QMainWindow):
 
             self._update_ui()
 
-
-
     # ── UI 更新 ──
-
-
 
     def _update_ui(self):
 
@@ -840,8 +762,6 @@ class MainWindow(QMainWindow):
         files = self.file_list.files
 
         idx = self.file_list.index
-
-
 
         if files and idx >= 0:
 
@@ -854,8 +774,6 @@ class MainWindow(QMainWindow):
             self._current_path = None
 
             self.titlebar.set_title("RedGarph")
-
-
 
     def _load_current(self):
 
@@ -876,8 +794,6 @@ class MainWindow(QMainWindow):
 
         self.titlebar.set_title(f"RedGarph — {path.name}")
 
-
-
         # 更新信息栏
 
         self.info_bar.show_info(path, self.image_panel.source)
@@ -886,15 +802,11 @@ class MainWindow(QMainWindow):
 
         self._position_info_bar()
 
-
-
         # 更新 EXIF 面板（如果可见）
 
         if self.exif_panel.isVisible():
 
             self.exif_panel.set_image(str(path))
-
-
 
     def _on_index_changed(self, index: int):
 
@@ -902,19 +814,13 @@ class MainWindow(QMainWindow):
 
             self._load_current()
 
-
-
     # ── 幻灯片 ──
-
-
 
     def _toggle_slideshow(self):
 
         self.slideshow.toggle()
 
         self._act_slideshow.setChecked(self.slideshow.is_active)
-
-
 
     def _adjust_slideshow_interval(self):
 
@@ -930,8 +836,6 @@ class MainWindow(QMainWindow):
         if ok:
             self.slideshow.interval = sec
 
-
-
     def _slideshow_next(self):
 
         if self.file_list.can_next():
@@ -942,11 +846,7 @@ class MainWindow(QMainWindow):
 
             self.file_list.go_to(0)
 
-
-
     # ── EXIF 面板 ──
-
-
 
     def _toggle_exif(self):
 
@@ -960,11 +860,7 @@ class MainWindow(QMainWindow):
 
             self.exif_panel.set_image(str(self._current_path))
 
-
-
     # ── 裁剪模式 ──
-
-
 
     def _toggle_crop(self):
 
@@ -980,19 +876,13 @@ class MainWindow(QMainWindow):
 
             self._act_crop.setChecked(True)
 
-
-
     # ── 信息栏 ──
-
-
 
     def _toggle_info(self):
 
         self.info_bar.toggle()
 
         self._act_info.setChecked(self.info_bar.isVisible())
-
-
 
     def _position_info_bar(self):
 
@@ -1014,11 +904,7 @@ class MainWindow(QMainWindow):
 
             self.info_bar.setGeometry(x, y, iw, ih)
 
-
-
     # ── 主题 ──
-
-
 
     def _switch_theme(self, name: str):
 
@@ -1034,11 +920,7 @@ class MainWindow(QMainWindow):
 
             act.setChecked(n == name)
 
-
-
     # ── 保存 / 另存为 ──
-
-
 
     _EXT_FMT = {
 
@@ -1049,8 +931,6 @@ class MainWindow(QMainWindow):
         ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF",
 
     }
-
-
 
     def _save_image(self):
 
@@ -1071,8 +951,6 @@ class MainWindow(QMainWindow):
         if not pix.save(str(self._current_path), fmt):
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
-
-
 
     def _save_image_as(self):
 
@@ -1108,11 +986,7 @@ class MainWindow(QMainWindow):
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
 
-
-
     # ── 剪贴板 ──
-
-
 
     def _copy_to_clipboard(self):
 
@@ -1124,11 +998,7 @@ class MainWindow(QMainWindow):
 
         QApplication.clipboard().setPixmap(self.image_panel.current_pixmap())
 
-
-
     # ── 资源管理器 ──
-
-
 
     def _show_in_explorer(self):
 
@@ -1140,11 +1010,7 @@ class MainWindow(QMainWindow):
 
         subprocess.Popen(["explorer", f"/select,{self._current_path}"])
 
-
-
     # ── 删除到回收站 ──
-
-
 
     def _delete_current(self):
         """Del — 将当前文件移至回收站，自动跳到下一张"""
@@ -1164,7 +1030,6 @@ class MainWindow(QMainWindow):
             return
 
         self.file_list.remove_current()
-
 
     @staticmethod
 
@@ -1210,11 +1075,7 @@ class MainWindow(QMainWindow):
 
         return ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0
 
-
-
     # ── 关于 ──
-
-
 
     def _show_about(self):
 
@@ -1234,11 +1095,7 @@ class MainWindow(QMainWindow):
 
         )
 
-
-
     # ── 窗口缩放（无框窗口边缘拖拽） ──
-
-
 
     def _get_resize_dir(self, pos: QPoint) -> set[str]:
 
@@ -1266,8 +1123,6 @@ class MainWindow(QMainWindow):
 
         return r
 
-
-
     def _update_cursor(self, pos: QPoint):
 
         d = self._get_resize_dir(pos)
@@ -1292,8 +1147,6 @@ class MainWindow(QMainWindow):
 
             self.setCursor(Qt.CursorShape.SizeHorCursor)
 
-
-
     def _toggle_maximize(self):
 
         if self.isMaximized():
@@ -1303,8 +1156,6 @@ class MainWindow(QMainWindow):
         else:
 
             self.showMaximized()
-
-
 
     def changeEvent(self, event):
 
@@ -1325,7 +1176,6 @@ class MainWindow(QMainWindow):
                 self._fullscreen_hover_timer.stop()
 
         super().changeEvent(event)
-
 
     def _check_fullscreen_hover(self):
 
@@ -1351,10 +1201,7 @@ class MainWindow(QMainWindow):
 
             self.titlebar.setVisible(False)
 
-
     # ── 拖拽 ──
-
-
 
     def dragEnterEvent(self, event: QDragEnterEvent | None):
 
@@ -1362,15 +1209,11 @@ class MainWindow(QMainWindow):
 
             event.acceptProposedAction()
 
-
-
     def dragMoveEvent(self, event):
 
         if event and event.mimeData().hasUrls():
 
             event.acceptProposedAction()
-
-
 
     def dropEvent(self, event: QDropEvent | None):
 
@@ -1392,11 +1235,7 @@ class MainWindow(QMainWindow):
 
             self.load_path(urls[0])
 
-
-
     # ── 键盘快捷键 ──
-
-
 
     def keyPressEvent(self, event):
 
@@ -1404,11 +1243,7 @@ class MainWindow(QMainWindow):
 
         mod = event.modifiers()
 
-
-
         # Esc 退出裁剪 / 幻灯片 / 全屏
-
-
 
         if key == Qt.Key.Key_Escape:
 
@@ -1416,15 +1251,11 @@ class MainWindow(QMainWindow):
 
                 self.image_panel.cancel_crop()
 
-
-
             if self.isFullScreen():
 
                 self.showNormal()
 
                 self.titlebar.setVisible(True)
-
-
 
             if self.slideshow.is_active:
 
@@ -1432,71 +1263,37 @@ class MainWindow(QMainWindow):
 
                 self._act_slideshow.setChecked(False)
 
-
-
         # F / F11 全屏
-
-
 
         elif key in (Qt.Key.Key_F, Qt.Key.Key_F11):
 
-
-
             if self.isFullScreen():
-
-
 
                 self.showNormal()
 
-
-
                 self.titlebar.setVisible(True)
-
-
 
             else:
 
-
-
                 self.showFullScreen()
-
-
 
                 self.titlebar.setVisible(False)
 
-
-
         # ← 上一张
-
-
 
         elif key == Qt.Key.Key_Left:
 
-
-
             self._stop_slideshow()
-
-
 
             self.file_list.prev_image()
 
-
-
         # → 下一张
-
-
 
         elif key == Qt.Key.Key_Right:
 
-
-
             self._stop_slideshow()
 
-
-
             self.file_list.next_image()
-
-
 
         # [ 减少间隔
 
@@ -1504,118 +1301,63 @@ class MainWindow(QMainWindow):
 
             self.slideshow.interval = max(1, self._slideshow_interval - 1)
 
-
-
         # ] 增加间隔
 
         elif key == Qt.Key.Key_BracketRight:
 
             self.slideshow.interval = min(60, self._slideshow_interval + 1)
 
-
-
         # R 顺时针旋转
-
-
 
         elif key == Qt.Key.Key_R and mod == Qt.KeyboardModifier.NoModifier:
 
-
-
             self.image_panel.rotate_right()
-
-
 
         # Shift+R 逆时针旋转
 
-
-
         elif key == Qt.Key.Key_R and mod == Qt.KeyboardModifier.ShiftModifier:
-
-
 
             self.image_panel.rotate_left()
 
-
-
         # Ctrl+0 适应窗口
-
-
 
         elif key == Qt.Key.Key_0 and mod == Qt.KeyboardModifier.ControlModifier:
 
-
-
             self.image_panel.fit_to_window()
-
-
 
         # Ctrl+1 原始尺寸
 
-
-
         elif key == Qt.Key.Key_1 and mod == Qt.KeyboardModifier.ControlModifier:
-
-
 
             self.image_panel.actual_size()
 
-
-
         # + 放大
-
-
 
         elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
 
-
-
             self.image_panel.zoom_in()
-
-
 
         # - 缩小
 
-
-
         elif key == Qt.Key.Key_Minus:
-
-
 
             self.image_panel.zoom_out()
 
-
-
         # Enter 确认裁剪
-
-
 
         elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
 
-
-
             if self.image_panel.is_crop_mode:
-
-
 
                 self.image_panel.apply_crop()
 
-
             else:
-
-
 
                 super().keyPressEvent(event)
 
-
-
         else:
 
-
-
             super().keyPressEvent(event)
-
-
 
     def _stop_slideshow(self):
 
@@ -1626,8 +1368,6 @@ class MainWindow(QMainWindow):
             self._act_slideshow.setChecked(False)
 
     # ── 窗口大小变化 ──
-
-
 
     def resizeEvent(self, event):
 

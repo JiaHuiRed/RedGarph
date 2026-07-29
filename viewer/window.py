@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
 
 from PyQt6.QtGui import (
     QAction, QMouseEvent, QDragEnterEvent, QDropEvent, QPainter, QColor,
@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
 
     QPushButton, QLabel, QFileDialog, QMenu, QApplication,
 
-    QMessageBox, QSplitter,
+    QMessageBox, QSplitter, QInputDialog,
 
 )
 
@@ -426,6 +426,12 @@ class MainWindow(QMainWindow):
         self.slideshow = Slideshow(self)
 
         self._slideshow_interval = SLIDESHOW_INTERVAL
+
+        self._fullscreen_hover_timer = QTimer(self)
+
+        self._fullscreen_hover_timer.setInterval(100)
+
+        self._fullscreen_hover_timer.timeout.connect(self._check_fullscreen_hover)
 
         self.image_panel = ImagePanel()
 
@@ -1292,11 +1298,40 @@ class MainWindow(QMainWindow):
 
                 self.titlebar.setVisible(False)
 
+                self._fullscreen_hover_timer.start()
+
             else:
 
                 self.titlebar.setVisible(True)
 
+                self._fullscreen_hover_timer.stop()
+
         super().changeEvent(event)
+
+
+    def _check_fullscreen_hover(self):
+
+        """全屏时鼠标移到顶部自动显示标题栏"""
+
+        if not self.isFullScreen():
+
+            self._fullscreen_hover_timer.stop()
+
+            self.titlebar.setVisible(True)
+
+            return
+
+        y = QCursor.pos().y()
+
+        top = self.geometry().top()
+
+        if y <= top + TITLEBAR_HEIGHT:
+
+            self.titlebar.setVisible(True)
+
+        else:
+
+            self.titlebar.setVisible(False)
 
 
     # ── 拖拽 ──

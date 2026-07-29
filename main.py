@@ -1,5 +1,5 @@
 #author Red
-#260729 Red&小宋 RedGarph V0.1.3 — 图片查看器入口
+#260729 Red&小宋 RedGarph V0.1.4 — 图片查看器入口
 
 import os
 import sys

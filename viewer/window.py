@@ -796,7 +796,11 @@ class MainWindow(QMainWindow):
 
         # 更新信息栏
 
-        self.info_bar.show_info(path, self.image_panel.source)
+        self.info_bar.show_info(
+            path,
+            self.image_panel.source,
+            extra=f"幻灯片间隔：{self._slideshow_interval}s",
+        )
 
         self.info_bar.show_page(self.file_list.index, self.file_list.count)
 

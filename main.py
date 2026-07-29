@@ -66,7 +66,7 @@ def main():
         app.setOrganizationName("RedStudio")
 
         # 设置窗口图标（标题栏 + 任务栏）
-        icon_path = _resource_path("resources" / "icon.ico")
+        icon_path = _resource_path(Path("resources") / "icon.ico")
         if icon_path.exists():
             from PyQt6.QtGui import QIcon
             app.setWindowIcon(QIcon(str(icon_path)))

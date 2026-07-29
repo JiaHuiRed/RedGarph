@@ -552,7 +552,9 @@ class MainWindow(QMainWindow):
         self._act_slideshow.triggered.connect(self._toggle_slideshow)
         menu.addAction(self._act_slideshow)
 
-
+        act_slideshow_interval = QAction("间隔调节...", self)
+        act_slideshow_interval.triggered.connect(self._adjust_slideshow_interval)
+        menu.addAction(act_slideshow_interval)
 
         menu.addSeparator()
 
@@ -911,6 +913,22 @@ class MainWindow(QMainWindow):
         self.slideshow.toggle()
 
         self._act_slideshow.setChecked(self.slideshow.is_active)
+
+
+
+    def _adjust_slideshow_interval(self):
+
+        sec, ok = QInputDialog.getInt(
+            self,
+            "幻灯片间隔",
+            "间隔秒数（1-60）：",
+            self._slideshow_interval,
+            1,
+            60,
+        )
+
+        if ok:
+            self.slideshow.interval = sec
 
 
 

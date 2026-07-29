@@ -1,0 +1,44 @@
+@echo off
+set MODE=%~1
+if "%MODE%"=="debug" (
+    set BUILD_NAME=RedGarph_debug
+    set CONSOLE_FLAG=--console
+    set OUTPUT_MSG=dist/RedGarph_debug.exe
+    set SPEC_FILE=RedGarph_debug.spec
+) else (
+    set BUILD_NAME=RedGarph
+    set CONSOLE_FLAG=--windowed
+    set OUTPUT_MSG=dist/RedGarph.exe
+    set SPEC_FILE=RedGarph.spec
+)
+
+where python >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Python not found. Install Python 3.10+ first.
+    pause
+    exit /b 1
+)
+
+where pyinstaller >nul 2>&1
+if %errorlevel% neq 0 (
+    pip install pyinstaller
+)
+
+for /f "delims=" %%v in ('python -c "import sys; sys.path.insert(0, '.'); from viewer.constants import APP_VERSION; print(APP_VERSION)"') do set APP_VERSION=%%v
+
+echo Building RedGarph V%APP_VERSION% (%MODE%)...
+pyinstaller --onefile %CONSOLE_FLAG% --name "%BUILD_NAME%" --icon resources\icon.ico --add-data "resources\icon.ico;resources" --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
+
+set BUILD_ERROR=%errorlevel%
+
+if %BUILD_ERROR% equ 0 (
+    echo.
+    echo Build OK -- %OUTPUT_MSG%
+    rmdir /s /q build >nul 2>&1
+    del %SPEC_FILE% >nul 2>&1
+) else (
+    echo.
+    echo Build failed.
+)
+
+exit /b %BUILD_ERROR%

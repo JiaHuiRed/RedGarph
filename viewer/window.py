@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 
 from .constants import (
     APP_NAME, APP_VERSION, WINDOW_WIDTH, WINDOW_HEIGHT, IMAGE_EXTENSIONS,
+    SLIDESHOW_INTERVAL,
 )
 
 from .theme import apply_theme, THEMES, THEME_LABELS
@@ -704,11 +705,7 @@ class MainWindow(QMainWindow):
         """选择文件夹并加载图片"""
 
         d = QFileDialog.getExistingDirectory(
-
             self, "选择图片文件夹", "",
-
-            QFileDialog.Option.DontUseNativeDialog,
-
         )
 
         if not d:
@@ -971,13 +968,8 @@ class MainWindow(QMainWindow):
             return
 
         path, _ = QFileDialog.getSaveFileName(
-
             self, "另存为", str(self._current_path),
-
             "图片 (*.png *.jpg *.bmp *.webp *.tiff);;所有文件 (*)",
-
-            options=QFileDialog.Option.DontUseNativeDialog,
-
         )
 
         if not path:

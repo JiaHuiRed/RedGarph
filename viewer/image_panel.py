@@ -4,7 +4,7 @@
 from PyQt6.QtCore import Qt, QRectF, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import (
     QPixmap, QPainter, QColor, QBrush, QTransform,
-    QPen, QFont, QFontMetrics, QAction,
+    QPen, QFont, QFontMetrics, QAction, QImageReader,
 )
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
@@ -13,6 +13,9 @@ from PyQt6.QtWidgets import (
 from collections import OrderedDict
 
 from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
+
+# 显示用解码长边上限：超过则缩小解码，保存/裁剪时再按全分辨率处理
+_DISPLAY_MAX = 3840
 
 
 class _CropOverlay(QWidget):
@@ -196,6 +199,7 @@ class ImagePanel(QGraphicsView):
         self._source = QPixmap()   # 原始未旋转的图片
         self._zoom: float | None = None   # None = 适应窗口模式
         self._rotation = 0          # 0/90/180/270
+        self._full_path: str | None = None  # 磁盘原图路径；裁剪/编辑后置 None
 
         # ── 图片缓存（LRU，避免翻页时重复解码） ──
         self._cache: OrderedDict[str, QPixmap] = OrderedDict()
@@ -327,11 +331,12 @@ class ImagePanel(QGraphicsView):
     # ── 图片加载 ──
 
     def load_image(self, path: str) -> bool:
-        """加载图片，适应窗口显示"""
+        """加载图片，适应窗口显示（大图缩小解码，翻页更快）"""
         if not path:
             self._source = QPixmap()
             self._rotation = 0
             self._zoom = None
+            self._full_path = None
             self._refresh()
             return True
 
@@ -341,12 +346,22 @@ class ImagePanel(QGraphicsView):
             self._cache.move_to_end(path)
             self._rotation = 0
             self._zoom = None
+            self._full_path = path
             self._refresh()
             return True
 
-        pix = QPixmap(path)
-        if pix.isNull():
+        # 缩小解码：长边超过 _DISPLAY_MAX 时按比例缩小，避免全尺寸同步解码卡顿
+        reader = QImageReader(path)
+        reader.setAutoTransform(True)  # 应用 EXIF 方向
+        size = reader.size()
+        if size.isValid() and max(size.width(), size.height()) > _DISPLAY_MAX:
+            reader.setScaledSize(
+                size.scaled(_DISPLAY_MAX, _DISPLAY_MAX, Qt.AspectRatioMode.KeepAspectRatio)
+            )
+        img = reader.read()
+        if img.isNull():
             return False
+        pix = QPixmap.fromImage(img)
 
         # 写入 LRU 缓存
         self._cache[path] = pix
@@ -356,6 +371,7 @@ class ImagePanel(QGraphicsView):
         self._source = pix
         self._rotation = 0
         self._zoom = None
+        self._full_path = path
         self._refresh()
         return True
 
@@ -423,6 +439,27 @@ class ImagePanel(QGraphicsView):
         if self._source.isNull():
             return QPixmap()
         return self._get_rotated_display()
+
+    def full_res_pixmap(self) -> QPixmap:
+        """全分辨率图片（含旋转）。
+
+        未编辑过时从磁盘全尺寸重解码，保存不丢分辨率；
+        已编辑（裁剪）过则直接用内存中的 _source。
+        """
+        if self._source.isNull():
+            return QPixmap()
+        if self._full_path is None:
+            return self._get_rotated_display()
+        reader = QImageReader(self._full_path)
+        reader.setAutoTransform(True)
+        img = reader.read()
+        if img.isNull():
+            return self._get_rotated_display()
+        pix = QPixmap.fromImage(img)
+        if self._rotation:
+            t = QTransform().rotate(self._rotation)
+            pix = pix.transformed(t, Qt.TransformationMode.SmoothTransformation)
+        return pix
 
     # ── 内部刷新 ──
 
@@ -630,6 +667,45 @@ class ImagePanel(QGraphicsView):
         if img_rect.width() < 2 or img_rect.height() < 2:
             return
 
+        # 未编辑过的图：按显示比例映射到全尺寸图，全分辨率裁剪，保住细节
+        if self._full_path is not None:
+            reader = QImageReader(self._full_path)
+            reader.setAutoTransform(True)
+            img = reader.read()
+            if not img.isNull():
+                full = QPixmap.fromImage(img)
+                # 全尺寸图先旋转到与显示一致的方向，再按比例裁剪
+                full_display = full
+                if self._rotation:
+                    t = QTransform().rotate(self._rotation)
+                    full_display = full.transformed(
+                        t, Qt.TransformationMode.SmoothTransformation
+                    )
+                sx = full_display.width() / display.width()
+                sy = full_display.height() / display.height()
+                full_rect = QRect(
+                    int(img_rect.x() * sx),
+                    int(img_rect.y() * sy),
+                    max(1, int(img_rect.width() * sx)),
+                    max(1, int(img_rect.height() * sy)),
+                ).intersected(full_display.rect())
+                if full_rect.width() >= 2 and full_rect.height() >= 2:
+                    cropped = full_display.copy(full_rect)
+                    # 反向旋转回原始方向，重建 _source
+                    if self._rotation:
+                        t2 = QTransform().rotate(-self._rotation)
+                        cropped = cropped.transformed(
+                            t2, Qt.TransformationMode.SmoothTransformation
+                        )
+                    self._source = cropped
+                    self._rotation = 0
+                    self._full_path = None
+                    self._zoom = None
+                    self._refresh()
+                    return
+            # 全尺寸解码失败：回退到显示图裁剪
+            self._full_path = None
+
         cropped = display.copy(img_rect)
 
         # 如果图片被旋转过，裁剪后反向旋转回原始方向
@@ -644,6 +720,7 @@ class ImagePanel(QGraphicsView):
         else:
             self._source = cropped
 
+        self._full_path = None
         self._zoom = None
         self._refresh()
 

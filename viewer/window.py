@@ -551,7 +551,8 @@ class MainWindow(QMainWindow):
 
         if self.exif_panel.isVisible():
 
-            self.exif_panel.set_image(str(path))
+            # 延迟到事件循环空闲再读 EXIF，不阻塞首屏
+            QTimer.singleShot(0, lambda p=path: self.exif_panel.set_image(str(p)))
 
     def _on_index_changed(self, index: int):
 
@@ -685,7 +686,7 @@ class MainWindow(QMainWindow):
 
             return
 
-        pix = self.image_panel.current_pixmap()
+        pix = self.image_panel.full_res_pixmap()
 
         if pix.isNull():
 
@@ -705,7 +706,7 @@ class MainWindow(QMainWindow):
 
             return
 
-        pix = self.image_panel.current_pixmap()
+        pix = self.image_panel.full_res_pixmap()
 
         if pix.isNull():
 
@@ -1079,13 +1080,13 @@ class MainWindow(QMainWindow):
 
         # - 缩小
 
-        elif key == Qt.Key.Key_Minus:
-
-            self.image_panel.zoom_out()
-
-        # Enter 确认裁剪
-
-        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+        elif key == Qt.Key.Key_Minus:
+
+            self.image_panel.zoom_out()
+
+        # Enter 确认裁剪
+
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
 
             if self.image_panel.is_crop_mode:
 

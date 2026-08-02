@@ -74,6 +74,12 @@ def main():
         win = MainWindow(theme="night")
         win.show()
 
+        # 无框窗口默认不抢前台：主动置顶激活，并延时补一次（应对 Windows 前台锁）
+        win.raise_()
+        win.activateWindow()
+        QTimer.singleShot(100, win.raise_)
+        QTimer.singleShot(100, win.activateWindow)
+
         # 处理命令行参数（延迟到事件循环首轮，确保窗口先 show 出来）
         args = sys.argv[1:]
         if args:

@@ -1,5 +1,5 @@
 #author Red
-#260729 Red&小宋 RedGarph V0.1.5 — 标题栏组件
+#260802 Red&小宋 RedGarph V0.1.6 — 标题栏组件
 
 from PyQt6.QtCore import QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QPainter, QColor

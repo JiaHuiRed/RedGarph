@@ -5,12 +5,12 @@ set MODE=%~1
 if "%MODE%"=="debug" (
     set BUILD_NAME=RedGarph_debug
     set CONSOLE_FLAG=--console
-    set OUTPUT_MSG=dist/RedGarph_debug.exe
+    set OUTPUT_MSG=dist/RedGarph_debug/RedGarph_debug.exe
     set SPEC_FILE=RedGarph_debug.spec
 ) else (
     set BUILD_NAME=RedGarph
     set CONSOLE_FLAG=--windowed
-    set OUTPUT_MSG=dist/RedGarph.exe
+    set OUTPUT_MSG=dist/RedGarph/RedGarph.exe
     set SPEC_FILE=RedGarph.spec
 )
 
@@ -40,7 +40,7 @@ if %errorlevel% neq 0 (
 )
 
 echo Building RedGarph V%APP_VERSION% (%MODE%)...
-pyinstaller --onefile %CONSOLE_FLAG% --name "%BUILD_NAME%" --icon resources\icon.ico --add-data "resources\icon.ico;resources" --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
+pyinstaller --onedir %CONSOLE_FLAG% --name "%BUILD_NAME%" --icon resources\icon.ico --add-data "resources\icon.ico;resources" --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
 
 set BUILD_ERROR=%errorlevel%
 

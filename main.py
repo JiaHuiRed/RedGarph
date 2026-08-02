@@ -72,11 +72,14 @@ def main():
             app.setWindowIcon(QIcon(str(icon_path)))
 
         win = MainWindow(theme="night")
-        win.show()
 
-        # 无框窗口默认不抢前台：主动置顶激活，并延时补一次（应对 Windows 前台锁）
-        win.raise_()
-        win.activateWindow()
+        # Qt 6.11 frameless 窗口首次 show 会用默认尺寸建窗再重建（闪烁）。
+        # 绕法：先 show 触发重建（隐藏态），稳定后再真正显示
+        win.show()
+        win.hide()
+        QTimer.singleShot(50, win.show)
+
+        # 无框窗口默认不抢前台：延时激活（立即激活在窗口未显示时无效，且可能触发 native 重建闪烁）
         QTimer.singleShot(100, win.raise_)
         QTimer.singleShot(100, win.activateWindow)
 

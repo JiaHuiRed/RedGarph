@@ -189,8 +189,7 @@ class MainWindow(QMainWindow):
 
         self._connect_signals()
 
-        # 提前创建 native window，让 FramelessWindowHint show 前就生效，避免闪框
-        self.winId()
+
 
     # ── 构建 UI ──
 
@@ -198,7 +197,7 @@ class MainWindow(QMainWindow):
 
         """构建 macOS 风格标题栏 + 菜单"""
 
-        self.titlebar = TitleBar("RedGarph", version=APP_VERSION)
+        self.titlebar = TitleBar("RedGarph", version=APP_VERSION, parent=self)
 
         self.titlebar.close_clicked.connect(self.close)
 

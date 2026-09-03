@@ -38,7 +38,10 @@ class InfoBar(QWidget):
             return
 
         name = path.name
-        size_str = _format_size(path.stat().st_size)
+        try:
+            size_str = _format_size(path.stat().st_size)
+        except OSError:
+            size_str = "文件不可访问"
 
         if pixmap and not pixmap.isNull():
 

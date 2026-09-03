@@ -775,7 +775,10 @@ class MainWindow(QMainWindow):
 
             return
 
-        subprocess.Popen(["explorer", f"/select,{self._current_path}"])
+        try:
+            subprocess.Popen(["explorer", f"/select,{self._current_path}"])
+        except OSError:
+            QMessageBox.warning(self, "操作失败", "无法打开资源管理器")
 
     # ── 删除到回收站 ──
 
@@ -840,7 +843,11 @@ class MainWindow(QMainWindow):
 
         )
 
-        return ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0
+        try:
+            result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+        except (AttributeError, OSError):
+            return False
+        return result == 0 and not op.fAborted
 
     # ── 关于 ──
 

@@ -59,10 +59,19 @@ class FileList(QObject):
         if not path.is_dir():
             return False
 
+        try:
+            entries = sorted(path.iterdir(), key=lambda p: _natural_key(p.name))
+        except OSError:
+            return False
+
         files = []
-        for f in sorted(path.iterdir(), key=lambda p: _natural_key(p.name)):
-            if f.suffix.lower() in IMAGE_EXTENSIONS and f.is_file():
-                files.append(f)
+        for f in entries:
+            try:
+                if f.suffix.lower() in IMAGE_EXTENSIONS and f.is_file():
+                    files.append(f)
+            except OSError:
+                # 目录扫描期间文件可能被删除或权限发生变化，跳过该项。
+                continue
 
         self._directory = path
         self._files = files

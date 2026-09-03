@@ -350,6 +350,9 @@ class ImagePanel(QGraphicsView):
 
     def load_image(self, path: str) -> bool:
         """加载图片，适应窗口显示（大图缩小解码，翻页更快）"""
+        if self._crop_mode:
+            self.exit_crop_mode(apply=False)
+
         if not path:
             self._source = QPixmap()
             self._rotation = 0

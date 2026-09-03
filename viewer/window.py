@@ -292,6 +292,7 @@ class MainWindow(QMainWindow):
 
         self._act_exif = QAction("EXIF 信息", self)
         self._act_exif.setCheckable(True)
+        self._act_exif.setChecked(self.exif_panel.isVisible())
         self._bind_shortcut(self._act_exif, "Ctrl+E")
         self._act_exif.triggered.connect(self._toggle_exif)
         menu.addAction(self._act_exif)

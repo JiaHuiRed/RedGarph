@@ -13,9 +13,9 @@ if %errorlevel% neq 0 (
     pip install PyQt6
 )
 
-if exist "%~dp0dist\RedGarph.exe" (
+if exist "%~dp0dist\RedGarph\RedGarph.exe" (
     echo Starting RedGarph (compiled)...
-    start "" "%~dp0dist\RedGarph.exe"
+    start "" "%~dp0dist\RedGarph\RedGarph.exe"
 ) else (
     echo Starting RedGarph (source)...
     python main.py

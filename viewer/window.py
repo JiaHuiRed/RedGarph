@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
 
 from PyQt6.QtGui import (
     QAction, QMouseEvent, QDragEnterEvent, QDropEvent, QPainter, QColor,
-    QCursor, QRegion,
+    QCursor, QRegion, QKeySequence,
 )
 
 from PyQt6.QtWidgets import (
@@ -191,9 +191,14 @@ class MainWindow(QMainWindow):
 
 
 
-    # ── 构建 UI ──
-
-    def _build_titlebar(self):
+    # ── 构建 UI ──
+
+    @staticmethod
+    def _bind_shortcut(action: QAction, sequence: str):
+        action.setShortcut(QKeySequence(sequence))
+        action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+
+    def _build_titlebar(self):
 
         """构建 macOS 风格标题栏 + 菜单"""
 
@@ -221,49 +226,56 @@ class MainWindow(QMainWindow):
 
         # 文件
 
-        act_open = QAction("打开文件夹...", self)
-        act_open.triggered.connect(self._open_folder)
+        act_open = QAction("打开文件夹...", self)
+        self._bind_shortcut(act_open, "Ctrl+O")
+        act_open.triggered.connect(self._open_folder)
         menu.addAction(act_open)
 
         menu.addSeparator()
 
         # 保存
 
-        act_save = QAction("保存", self)
-        act_save.triggered.connect(self._save_image)
+        act_save = QAction("保存", self)
+        self._bind_shortcut(act_save, "Ctrl+S")
+        act_save.triggered.connect(self._save_image)
         menu.addAction(act_save)
 
-        act_save_as = QAction("另存为...", self)
-        act_save_as.triggered.connect(self._save_image_as)
+        act_save_as = QAction("另存为...", self)
+        self._bind_shortcut(act_save_as, "Ctrl+Shift+S")
+        act_save_as.triggered.connect(self._save_image_as)
         menu.addAction(act_save_as)
 
         menu.addSeparator()
 
         # 复制
 
-        act_copy = QAction("复制图片", self)
-        act_copy.triggered.connect(self._copy_to_clipboard)
+        act_copy = QAction("复制图片", self)
+        self._bind_shortcut(act_copy, "Ctrl+C")
+        act_copy.triggered.connect(self._copy_to_clipboard)
         menu.addAction(act_copy)
 
         menu.addSeparator()
 
         # 文件操作
 
-        act_show = QAction("在资源管理器中显示", self)
-        act_show.triggered.connect(self._show_in_explorer)
+        act_show = QAction("在资源管理器中显示", self)
+        self._bind_shortcut(act_show, "Ctrl+Shift+E")
+        act_show.triggered.connect(self._show_in_explorer)
         menu.addAction(act_show)
 
-        act_delete = QAction("删除到回收站", self)
-        act_delete.triggered.connect(self._delete_current)
+        act_delete = QAction("删除到回收站", self)
+        self._bind_shortcut(act_delete, "Delete")
+        act_delete.triggered.connect(self._delete_current)
         menu.addAction(act_delete)
 
         menu.addSeparator()
 
         # 幻灯片
 
-        self._act_slideshow = QAction("幻灯片播放", self)
-        self._act_slideshow.setCheckable(True)
-        self._act_slideshow.triggered.connect(self._toggle_slideshow)
+        self._act_slideshow = QAction("幻灯片播放", self)
+        self._act_slideshow.setCheckable(True)
+        self._bind_shortcut(self._act_slideshow, "Space")
+        self._act_slideshow.triggered.connect(self._toggle_slideshow)
         menu.addAction(self._act_slideshow)
 
         act_slideshow_interval = QAction("间隔调节...", self)
@@ -274,25 +286,28 @@ class MainWindow(QMainWindow):
 
         # EXIF 信息面板
 
-        self._act_exif = QAction("EXIF 信息", self)
-        self._act_exif.setCheckable(True)
-        self._act_exif.triggered.connect(self._toggle_exif)
+        self._act_exif = QAction("EXIF 信息", self)
+        self._act_exif.setCheckable(True)
+        self._bind_shortcut(self._act_exif, "Ctrl+E")
+        self._act_exif.triggered.connect(self._toggle_exif)
         menu.addAction(self._act_exif)
 
         # 显示信息
 
-        self._act_info = QAction("显示信息", self)
-        self._act_info.setCheckable(True)
-        self._act_info.triggered.connect(self._toggle_info)
+        self._act_info = QAction("显示信息", self)
+        self._act_info.setCheckable(True)
+        self._bind_shortcut(self._act_info, "I")
+        self._act_info.triggered.connect(self._toggle_info)
         menu.addAction(self._act_info)
 
         menu.addSeparator()
 
         # 裁剪模式
 
-        self._act_crop = QAction("裁剪模式", self)
-        self._act_crop.setCheckable(True)
-        self._act_crop.triggered.connect(self._toggle_crop)
+        self._act_crop = QAction("裁剪模式", self)
+        self._act_crop.setCheckable(True)
+        self._bind_shortcut(self._act_crop, "Ctrl+Shift+C")
+        self._act_crop.triggered.connect(self._toggle_crop)
         menu.addAction(self._act_crop)
 
         menu.addSeparator()
@@ -327,8 +342,9 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
-        act_quit = QAction("退出", self)
-        act_quit.triggered.connect(self.close)
+        act_quit = QAction("退出", self)
+        self._bind_shortcut(act_quit, "Ctrl+Q")
+        act_quit.triggered.connect(self.close)
         menu.addAction(act_quit)
 
         menu_btn.setMenu(menu)

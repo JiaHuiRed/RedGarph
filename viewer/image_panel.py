@@ -337,6 +337,8 @@ class ImagePanel(QGraphicsView):
             self._rotation = 0
             self._zoom = None
             self._full_path = None
+            self._item.setPixmap(QPixmap())
+            self._scene.setSceneRect(QRectF())
             self._refresh()
             return True
 
@@ -360,6 +362,8 @@ class ImagePanel(QGraphicsView):
             )
         img = reader.read()
         if img.isNull():
+            # 失败时清空旧图，避免调用方看到“新路径 + 旧画面”的不一致状态。
+            self.load_image("")
             return False
         pix = QPixmap.fromImage(img)
 
@@ -473,7 +477,10 @@ class ImagePanel(QGraphicsView):
     def _refresh(self):
         """根据 _source / _rotation / _zoom 重建显示"""
         if self._source.isNull():
+            self._item.setPixmap(QPixmap())
+            self._scene.setSceneRect(QRectF())
             self._zoom_label.setVisible(False)
+            self._bottom_toolbar.hide()
             return
 
         display = self._get_rotated_display()

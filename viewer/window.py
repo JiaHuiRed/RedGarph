@@ -530,9 +530,14 @@ class MainWindow(QMainWindow):
         # 先让窗口刷新一帧，再阻塞式解码图片，避免界面卡死感
         QApplication.processEvents()
 
-        self.image_panel.load_image(str(path))
-
-        self.titlebar.set_title(f"RedGarph — {path.name}")
+        if not self.image_panel.load_image(str(path)):
+            self.titlebar.set_title(f"RedGarph — 无法读取：{path.name}")
+            self.info_bar.show_info(path, extra="无法读取图片")
+            self.info_bar.show_page(self.file_list.index, self.file_list.count)
+            self._position_info_bar()
+            return
+
+        self.titlebar.set_title(f"RedGarph — {path.name}")
 
         # 更新信息栏
 

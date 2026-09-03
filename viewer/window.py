@@ -551,17 +551,19 @@ class MainWindow(QMainWindow):
 
         idx = self.file_list.index
 
-        if files and idx >= 0:
-
-            self._load_current()
+        if files and idx >= 0:
+
+            self._load_current()
+            self._loaded_index = idx
 
         else:
 
             self.image_panel.load_image("")
 
-            self._current_path = None
-
-            self.titlebar.set_title("RedGarph")
+            self._current_path = None
+
+            self.titlebar.set_title("RedGarph")
+            self._loaded_index = -1
 
     def _load_current(self):
 

@@ -149,7 +149,9 @@ class MainWindow(QMainWindow):
 
         self._theme = theme
 
-        self._current_path: Path | None = None
+        self._current_path: Path | None = None
+        self._loaded_index = -1
+        self._reverting_navigation = False
 
         # ── 无框窗口 ──
 
@@ -443,13 +445,13 @@ class MainWindow(QMainWindow):
 
         self.slideshow.intervalChanged.connect(self._on_slideshow_interval_changed)
 
-        self.image_panel.cropConfirmed.connect(lambda: self._act_crop.setChecked(False))
+        self.image_panel.cropConfirmed.connect(lambda: self._act_crop.setChecked(False))
 
         self.image_panel.cropCancelled.connect(lambda: self._act_crop.setChecked(False))
 
         self.image_panel.toggleCropRequested.connect(self._toggle_crop)
 
-        self.image_panel.saveRequested.connect(self._save_image)
+        self.image_panel.saveRequested.connect(self._save_image)
 
     def _on_slideshow_interval_changed(self, sec: int):
 
@@ -461,7 +463,25 @@ class MainWindow(QMainWindow):
 
     # ── 文件操作 ──
 
-    def _open_folder(self):
+    def _confirm_pending_changes(self) -> bool:
+        if not self.image_panel.is_modified:
+            return True
+
+        name = self._current_path.name if self._current_path else "当前图片"
+        reply = QMessageBox.warning(
+            self,
+            "未保存修改",
+            f'"{name}" 有未保存的修改，是否保存？',
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if reply == QMessageBox.StandardButton.Save:
+            return self._save_image()
+        return reply == QMessageBox.StandardButton.Discard
+
+    def _open_folder(self):
 
         """选择文件夹并加载图片"""
 
@@ -473,7 +493,10 @@ class MainWindow(QMainWindow):
 
             return
 
-        if self.file_list.load_directory(d):
+        if not self._confirm_pending_changes():
+            return
+
+        if self.file_list.load_directory(d):
 
             self._update_ui()
 
@@ -487,13 +510,19 @@ class MainWindow(QMainWindow):
 
         p = Path(path)
 
-        if p.is_dir():
+        if p.is_dir():
+            if not self._confirm_pending_changes():
+                return
+
 
             self.file_list.load_directory(p)
 
             self._update_ui()
 
-        elif p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
+        elif p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
+            if not self._confirm_pending_changes():
+                return
+
 
             self.file_list.load_directory(p.parent)
 
@@ -574,11 +603,19 @@ class MainWindow(QMainWindow):
             # 延迟到事件循环空闲再读 EXIF，不阻塞首屏
             QTimer.singleShot(0, lambda p=path: self.exif_panel.set_image(str(p)))
 
-    def _on_index_changed(self, index: int):
-
-        if index >= 0:
-
-            self._load_current()
+    def _on_index_changed(self, index: int):
+        if index < 0 or self._reverting_navigation:
+            return
+
+        if not self._confirm_pending_changes():
+            if 0 <= self._loaded_index < self.file_list.count:
+                self._reverting_navigation = True
+                self.file_list.go_to(self._loaded_index)
+                self._reverting_navigation = False
+            return
+
+        self._load_current()
+        self._loaded_index = index
 
     # ── 幻灯片 ──
 
@@ -717,15 +754,15 @@ class MainWindow(QMainWindow):
 
         """Ctrl+S — 覆盖保存（保留当前旋转/裁剪状态）"""
 
-        if not self._current_path:
-
-            return
+        if not self._current_path:
+
+            return False
 
         pix = self.image_panel.full_res_pixmap()
 
-        if pix.isNull():
-
-            return
+        if pix.isNull():
+
+            return False
 
         fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
 
@@ -736,6 +773,8 @@ class MainWindow(QMainWindow):
 
         else:
             self.image_panel.invalidate_cache(self._current_path)
+            self.image_panel.mark_saved()
+        return saved
 
     def _save_image_as(self):
 
@@ -769,6 +808,7 @@ class MainWindow(QMainWindow):
 
         else:
             self.image_panel.invalidate_cache(path)
+            self.image_panel.mark_saved()
 
     # ── 剪贴板 ──
 
@@ -799,11 +839,13 @@ class MainWindow(QMainWindow):
 
     # ── 删除到回收站 ──
 
-    def _delete_current(self):
-        """Del — 将当前文件移至回收站，自动跳到下一张"""
-        if not self._current_path or not self._current_path.exists():
-            return
-        name = self._current_path.name
+    def _delete_current(self):
+        """Del — 将当前文件移至回收站，自动跳到下一张"""
+        if not self._current_path or not self._current_path.exists():
+            return
+        if not self._confirm_pending_changes():
+            return
+        name = self._current_path.name
         reply = QMessageBox.question(
             self, "删除确认", f'将 "{name}" 移至回收站？',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -1160,7 +1202,14 @@ class MainWindow(QMainWindow):
 
     # ── 窗口大小变化 ──
 
-    def resizeEvent(self, event):
+    def closeEvent(self, event):
+        if not self._confirm_pending_changes():
+            event.ignore()
+            return
+        self.slideshow.stop()
+        event.accept()
+
+    def resizeEvent(self, event):
 
         super().resizeEvent(event)
 

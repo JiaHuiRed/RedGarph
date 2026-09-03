@@ -186,6 +186,7 @@ class ImagePanel(QGraphicsView):
     cropCancelled = pyqtSignal()
     toggleCropRequested = pyqtSignal()
     saveRequested = pyqtSignal()
+    modifiedChanged = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -201,6 +202,7 @@ class ImagePanel(QGraphicsView):
         self._zoom: float | None = None   # None = 适应窗口模式
         self._rotation = 0          # 0/90/180/270
         self._full_path: str | None = None  # 磁盘原图路径；裁剪/编辑后置 None
+        self._modified = False
 
         # ── 图片缓存（LRU，避免翻页时重复解码） ──
         self._cache: OrderedDict[str, tuple[tuple[int, int], QPixmap]] = OrderedDict()
@@ -353,6 +355,7 @@ class ImagePanel(QGraphicsView):
             self._rotation = 0
             self._zoom = None
             self._full_path = None
+            self._set_modified(False)
             self._item.setPixmap(QPixmap())
             self._scene.setSceneRect(QRectF())
             self._refresh()
@@ -367,6 +370,7 @@ class ImagePanel(QGraphicsView):
             self._rotation = 0
             self._zoom = None
             self._full_path = path
+            self._set_modified(False)
             self._refresh()
             return True
 
@@ -399,12 +403,27 @@ class ImagePanel(QGraphicsView):
         self._rotation = 0
         self._zoom = None
         self._full_path = path
+        self._set_modified(False)
         self._refresh()
         return True
 
     @property
     def has_image(self) -> bool:
         return not self._source.isNull()
+
+    @property
+    def is_modified(self) -> bool:
+        return self._modified
+
+    def _set_modified(self, value: bool):
+        value = bool(value)
+        if value != self._modified:
+            self._modified = value
+            self.modifiedChanged.emit(value)
+
+    def mark_saved(self):
+        """标记当前编辑状态已成功写入磁盘。"""
+        self._set_modified(False)
 
     # ── 缩放 ──
 
@@ -447,6 +466,7 @@ class ImagePanel(QGraphicsView):
         if self._source.isNull():
             return
         self._rotation = (self._rotation + 90) % 360
+        self._set_modified(True)
         self._refresh()
 
     def rotate_left(self):
@@ -454,6 +474,7 @@ class ImagePanel(QGraphicsView):
         if self._source.isNull():
             return
         self._rotation = (self._rotation - 90) % 360
+        self._set_modified(True)
         self._refresh()
 
     @property
@@ -731,6 +752,7 @@ class ImagePanel(QGraphicsView):
                     self._rotation = 0
                     self._full_path = None
                     self._zoom = None
+                    self._set_modified(True)
                     self._refresh()
                     return
             # 全尺寸解码失败：回退到显示图裁剪
@@ -752,6 +774,7 @@ class ImagePanel(QGraphicsView):
 
         self._full_path = None
         self._zoom = None
+        self._set_modified(True)
         self._refresh()
 
     # ── 底部工具栏事件 ──

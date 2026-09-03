@@ -543,9 +543,7 @@ class MainWindow(QMainWindow):
 
         self._current_path = path
 
-        # 先让窗口刷新一帧，再阻塞式解码图片，避免界面卡死感
-        QApplication.processEvents()
-
+        # 图片解码期间不主动处理全局事件，避免导航流程发生重入。
         if not self.image_panel.load_image(str(path)):
             self.titlebar.set_title(f"RedGarph — 无法读取：{path.name}")
             self.info_bar.show_info(path, extra="无法读取图片")

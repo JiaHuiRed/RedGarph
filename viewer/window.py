@@ -8,7 +8,9 @@ import subprocess
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
+from PyQt6.QtCore import (
+    Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer, QIODevice, QSaveFile,
+)
 
 from PyQt6.QtGui import (
     QAction, QMouseEvent, QDragEnterEvent, QDropEvent, QPainter, QColor,
@@ -686,17 +688,32 @@ class MainWindow(QMainWindow):
 
     # ── 保存 / 另存为 ──
 
-    _EXT_FMT = {
+    _EXT_FMT = {
 
         ".jpg": "JPEG", ".jpeg": "JPEG",
 
         ".png": "PNG", ".bmp": "BMP",
 
-        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF",
-
-    }
-
-    def _save_image(self):
+        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF",
+
+    }
+
+    @staticmethod
+    def _save_pixmap(pix, path: str | Path, fmt: str) -> bool:
+        """通过临时文件原子提交，避免保存失败时破坏原图。"""
+        save_file = QSaveFile(str(path))
+        try:
+            if not save_file.open(QIODevice.OpenModeFlag.WriteOnly):
+                return False
+            if not pix.save(save_file, fmt):
+                save_file.cancelWriting()
+                return False
+            return save_file.commit()
+        except (OSError, RuntimeError):
+            save_file.cancelWriting()
+            return False
+
+    def _save_image(self):
 
         """Ctrl+S — 覆盖保存（保留当前旋转/裁剪状态）"""
 
@@ -712,7 +729,7 @@ class MainWindow(QMainWindow):
 
         fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
 
-        saved = pix.save(str(self._current_path), fmt)
+        saved = self._save_pixmap(pix, self._current_path, fmt)
         if not saved:
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
@@ -745,7 +762,7 @@ class MainWindow(QMainWindow):
 
         fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
 
-        saved = pix.save(path, fmt)
+        saved = self._save_pixmap(pix, path, fmt)
         if not saved:
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")

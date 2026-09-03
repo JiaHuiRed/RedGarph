@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel, QWidget, QApplication, QHBoxLayout, QPushButton,
 )
 from collections import OrderedDict
+from pathlib import Path
 
 from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
 
@@ -202,7 +203,7 @@ class ImagePanel(QGraphicsView):
         self._full_path: str | None = None  # 磁盘原图路径；裁剪/编辑后置 None
 
         # ── 图片缓存（LRU，避免翻页时重复解码） ──
-        self._cache: OrderedDict[str, QPixmap] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[tuple[int, int], QPixmap]] = OrderedDict()
         self._cache_max = 20
 
         # ── 渲染设置 ──
@@ -330,6 +331,21 @@ class ImagePanel(QGraphicsView):
 
     # ── 图片加载 ──
 
+    @staticmethod
+    def _file_signature(path: str) -> tuple[int, int] | None:
+        try:
+            stat = Path(path).stat()
+        except OSError:
+            return None
+        return stat.st_mtime_ns, stat.st_size
+
+    def invalidate_cache(self, path: str | Path | None = None):
+        """清理指定文件或全部文件的显示缓存。"""
+        if path is None:
+            self._cache.clear()
+        else:
+            self._cache.pop(str(path), None)
+
     def load_image(self, path: str) -> bool:
         """加载图片，适应窗口显示（大图缩小解码，翻页更快）"""
         if not path:
@@ -343,14 +359,19 @@ class ImagePanel(QGraphicsView):
             return True
 
         # 缓存命中：直接使用内存中的 pixmap，跳过磁盘解码
-        if path in self._cache:
-            self._source = self._cache[path]
+        signature = self._file_signature(path)
+        cached = self._cache.get(path)
+        if cached is not None and signature is not None and cached[0] == signature:
+            self._source = cached[1]
             self._cache.move_to_end(path)
             self._rotation = 0
             self._zoom = None
             self._full_path = path
             self._refresh()
             return True
+
+        if cached is not None:
+            self._cache.pop(path, None)
 
         # 缩小解码：长边超过 _DISPLAY_MAX 时按比例缩小，避免全尺寸同步解码卡顿
         reader = QImageReader(path)
@@ -368,9 +389,11 @@ class ImagePanel(QGraphicsView):
         pix = QPixmap.fromImage(img)
 
         # 写入 LRU 缓存
-        self._cache[path] = pix
-        if len(self._cache) > self._cache_max:
-            self._cache.popitem(last=False)
+        signature = self._file_signature(path)
+        if signature is not None:
+            self._cache[path] = (signature, pix)
+            if len(self._cache) > self._cache_max:
+                self._cache.popitem(last=False)
 
         self._source = pix
         self._rotation = 0

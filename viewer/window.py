@@ -714,11 +714,15 @@ class MainWindow(QMainWindow):
 
         fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
 
-        if not pix.save(str(self._current_path), fmt):
+        saved = pix.save(str(self._current_path), fmt)
+        if not saved:
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
 
-    def _save_image_as(self):
+        else:
+            self.image_panel.invalidate_cache(self._current_path)
+
+    def _save_image_as(self):
 
         """Ctrl+Shift+S — 另存为"""
 
@@ -743,11 +747,15 @@ class MainWindow(QMainWindow):
 
         fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
 
-        if not pix.save(path, fmt):
+        saved = pix.save(path, fmt)
+        if not saved:
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
 
-    # ── 剪贴板 ──
+        else:
+            self.image_panel.invalidate_cache(path)
+
+    # ── 剪贴板 ──
 
     def _copy_to_clipboard(self):
 

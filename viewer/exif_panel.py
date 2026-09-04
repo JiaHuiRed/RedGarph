@@ -187,7 +187,7 @@ class ExifPanel(QWidget):
         title = QLabel("信息")
         title.setObjectName("exifTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        title.setContentsMargins(4, 0, 0, 0)
+        title.setContentsMargins(0, 0, 0, 0)
         title.setFixedHeight(30)
         layout.addWidget(title)
 

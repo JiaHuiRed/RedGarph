@@ -180,14 +180,15 @@ class ExifPanel(QWidget):
         self._exif_tasks: dict[int, _ExifTask] = {}
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(8)
 
         # ── 标题 ──
         title = QLabel("信息")
         title.setObjectName("exifTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setFixedHeight(32)
+        title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        title.setContentsMargins(4, 0, 0, 0)
+        title.setFixedHeight(30)
         layout.addWidget(title)
 
         # ── 树形列表 ──

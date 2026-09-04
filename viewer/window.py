@@ -259,9 +259,9 @@ class MainWindow(QMainWindow):
 
         menu_btn.setObjectName("MenuButton")
 
-        menu_btn.setFixedSize(28, 22)
+        menu_btn.setFixedSize(32, 26)
 
-        menu_btn.setCursor(Qt.CursorShape.ArrowCursor)
+        menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         menu_btn.setFlat(True)
 

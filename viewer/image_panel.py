@@ -12,7 +12,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-    QLabel, QWidget, QApplication, QHBoxLayout, QPushButton,
+    QLabel, QWidget, QApplication, QHBoxLayout, QPushButton, QFrame,
 )
 from collections import OrderedDict
 
@@ -235,9 +235,13 @@ class ImagePanel(QGraphicsView):
     toggleCropRequested = pyqtSignal()
     saveRequested = pyqtSignal()
     imageLoadFinished = pyqtSignal(str, bool)
+    dirtyChanged = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("imagePanel")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.viewport().setObjectName("imageViewport")
 
         # ── 场景与图元 ──
         self._scene = QGraphicsScene(self)
@@ -280,7 +284,6 @@ class ImagePanel(QGraphicsView):
         self.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        self.setBackgroundBrush(QBrush(QColor(30, 30, 30)))
 
         # 启动鼠标追踪，让拖拽模式正常工作
         self.setMouseTracking(True)
@@ -291,27 +294,36 @@ class ImagePanel(QGraphicsView):
         self._zoom_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom
         )
-        self._zoom_label.setContentsMargins(6, 4, 10, 6)
+        self._zoom_label.setContentsMargins(9, 5, 9, 5)
         self._zoom_label.setVisible(False)
 
         # ── 底部工具栏（裁剪 / 保存） ──
         self._bottom_toolbar = QWidget(self)
         self._bottom_toolbar.setObjectName("bottomToolbar")
+        self._bottom_toolbar.setStyleSheet(
+            "QWidget#bottomToolbar { background: rgba(27,30,35,0.94); "
+            "border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; }"
+        )
         tb_layout = QHBoxLayout(self._bottom_toolbar)
-        tb_layout.setContentsMargins(0, 0, 0, 0)
+        tb_layout.setContentsMargins(6, 6, 6, 6)
         tb_layout.setSpacing(6)
 
         style_btn = (
-            "QPushButton { color: #90A4AE; background: rgba(255,255,255,0.06); "
-            "border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; "
-            "padding: 3px 10px; font: 12px; }"
-            "QPushButton:hover { color: #ECEFF1; background: rgba(255,255,255,0.14); }"
+            "QPushButton { color: #D7DEE8; background: rgba(255,255,255,0.08); "
+            "border: 1px solid rgba(255,255,255,0.13); border-radius: 7px; "
+            "padding: 4px 12px; min-height: 24px; font: 12px; }"
+            "QPushButton:hover { color: #FFFFFF; background: rgba(255,255,255,0.16); "
+            "border-color: rgba(255,255,255,0.22); }"
+            "QPushButton:pressed { background: rgba(255,255,255,0.10); }"
+            "QPushButton:disabled { color: #6F7782; background: rgba(255,255,255,0.035); "
+            "border-color: rgba(255,255,255,0.06); }"
         )
 
         self._btn_toggle_crop = QPushButton("裁剪")
         self._btn_toggle_crop.setObjectName("btnToggleCrop")
         self._btn_toggle_crop.setCheckable(True)
         self._btn_toggle_crop.setCursor(Qt.CursorShape.ArrowCursor)
+        self._btn_toggle_crop.setToolTip("进入裁剪模式")
         self._btn_toggle_crop.setStyleSheet(
             style_btn +
             "QPushButton:checked { color: #4FC3F7; background: rgba(79,195,247,0.15); "
@@ -322,8 +334,19 @@ class ImagePanel(QGraphicsView):
         self._btn_save = QPushButton("保存")
         self._btn_save.setObjectName("btnSave")
         self._btn_save.setCursor(Qt.CursorShape.ArrowCursor)
-        self._btn_save.setStyleSheet(style_btn)
+        self._btn_save.setToolTip("保存当前编辑")
+        self._btn_save.setEnabled(False)
+        self._btn_save.setStyleSheet(
+            style_btn +
+            "QPushButton#btnSave { color: #D9F0FF; background: rgba(74,158,255,0.22); "
+            "border-color: rgba(74,158,255,0.42); }"
+            "QPushButton#btnSave:hover { background: rgba(74,158,255,0.34); "
+            "border-color: rgba(74,158,255,0.60); }"
+            "QPushButton#btnSave:disabled { color: #6F7782; background: rgba(255,255,255,0.035); "
+            "border-color: rgba(255,255,255,0.06); }"
+        )
         self._btn_save.clicked.connect(self._emit_save)
+        self.dirtyChanged.connect(self._btn_save.setEnabled)
 
         tb_layout.addWidget(self._btn_toggle_crop)
         tb_layout.addWidget(self._btn_save)
@@ -434,11 +457,17 @@ class ImagePanel(QGraphicsView):
         """使指定路径的缓存失效（保存、删除后调用）。"""
         self._remove_cached(self._cache_key(path))
 
+    def _set_dirty(self, dirty: bool):
+        if self._dirty == dirty:
+            return
+        self._dirty = dirty
+        self.dirtyChanged.emit(dirty)
+
     def _clear_image(self):
         self._source = QPixmap()
         self._image_size = None
         self._rotation = 0
-        self._dirty = False
+        self._set_dirty(False)
         self._zoom = None
         self._full_path = None
         self._item.setPixmap(QPixmap())
@@ -459,7 +488,7 @@ class ImagePanel(QGraphicsView):
         self._source = pix
         self._image_size = image_size
         self._rotation = 0
-        self._dirty = False
+        self._set_dirty(False)
         self._zoom = None
         self._full_path = path
         self._refresh()
@@ -476,7 +505,7 @@ class ImagePanel(QGraphicsView):
         self._image_size = entry[2]
         self._cache.move_to_end(key)
         self._rotation = 0
-        self._dirty = False
+        self._set_dirty(False)
         self._zoom = None
         self._full_path = path
         self._refresh()
@@ -612,7 +641,7 @@ class ImagePanel(QGraphicsView):
         """顺时针旋转 90°"""
         if self._source.isNull():
             return
-        self._dirty = True
+        self._set_dirty(True)
         self._rotation = (self._rotation + 90) % 360
         self._refresh()
 
@@ -620,7 +649,7 @@ class ImagePanel(QGraphicsView):
         """逆时针旋转 90°"""
         if self._source.isNull():
             return
-        self._dirty = True
+        self._set_dirty(True)
         self._rotation = (self._rotation - 90) % 360
         self._refresh()
 
@@ -711,15 +740,16 @@ class ImagePanel(QGraphicsView):
         margins = self._zoom_label.contentsMargins()
         lw = self._zoom_label.width() + margins.left() + margins.right() + 10
         lh = self._zoom_label.height() + margins.top() + margins.bottom() + 6
-        zx = self.width() - lw - 8
-        zy = self.height() - lh - 8
-        self._zoom_label.move(zx, zy)
-        # 工具栏放在缩放标签左边
         self._bottom_toolbar.adjustSize()
         tw = self._bottom_toolbar.width()
         th = self._bottom_toolbar.height()
+        group_w = tw + 8 + lw
+        group_x = max(8, (self.width() - group_w) // 2)
+        zy = max(8, self.height() - lh - 16)
+        self._zoom_label.move(group_x + tw + 8, zy)
+        # 工具栏与缩放标签作为一组居中显示
         self._bottom_toolbar.move(
-            zx - tw - 8,
+            group_x,
             zy + (lh - th) // 2,
         )
 
@@ -894,7 +924,7 @@ class ImagePanel(QGraphicsView):
                         )
                     self._source = cropped
                     self._image_size = (cropped.width(), cropped.height())
-                    self._dirty = True
+                    self._set_dirty(True)
                     self._rotation = 0
                     self._full_path = None
                     self._zoom = None
@@ -918,7 +948,7 @@ class ImagePanel(QGraphicsView):
             self._source = cropped
 
         self._image_size = (self._source.width(), self._source.height())
-        self._dirty = True
+        self._set_dirty(True)
         self._full_path = None
         self._zoom = None
         self._refresh()

@@ -4,9 +4,13 @@
 
 import ctypes
 import ctypes.wintypes  # 确保 PyInstaller 打包时包含该模块
-import subprocess
+import os
+import subprocess
+import tempfile
 
-from pathlib import Path
+from pathlib import Path
+
+from PIL import Image as PILImage
 
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
 
@@ -486,7 +490,8 @@ class MainWindow(QMainWindow):
 
         self.image_panel.toggleCropRequested.connect(self._toggle_crop)
 
-        self.image_panel.saveRequested.connect(self._save_image)
+        self.image_panel.saveRequested.connect(self._save_image)
+        self.image_panel.imageLoadFinished.connect(self._on_image_load_finished)
 
     def _on_slideshow_interval_changed(self, sec: int):
 
@@ -563,46 +568,38 @@ class MainWindow(QMainWindow):
             self.exif_panel.clear_exif()
             self._exif_generation += 1
 
-    def _load_current(self):
-
-        """加载当前索引的图片"""
-
-        path = self.file_list.current
-
-        if not path:
-
-            return
-
-        self._current_path = path
-
+    def _load_current(self):
+        """异步加载当前索引的图片"""
+        path = self.file_list.current
+        if not path:
+            return
+        self._current_path = path
         self._exif_generation += 1
-        if not self.image_panel.load_image(str(path)):
-            self._current_path = None
-            self.titlebar.set_title(f"RedGarph — {path.name}")
+        self.titlebar.set_title(f"RedGarph — {path.name}")
+        self.info_bar.show_info(None, extra="加载中...")
+        self.exif_panel.clear_exif()
+        self.image_panel.load_image_async(str(path))
+
+    def _on_image_load_finished(self, path_str: str, success: bool):
+        path = Path(path_str)
+        if self._current_path != path or self.file_list.current != path:
+            return
+        if not success:
             self.info_bar.show_info(None, extra="无法加载图片")
             self.exif_panel.clear_exif()
             return
-
-        self.titlebar.set_title(f"RedGarph — {path.name}")
-
-        # 更新信息栏
-
-        self.info_bar.show_info(
+
+        self.titlebar.set_title(f"RedGarph — {path.name}")
+        self.info_bar.show_info(
             path,
             self.image_panel.source,
             extra=f"幻灯片间隔：{self._slideshow_interval}s",
             dimensions=self.image_panel.image_size,
-        )
-
-        self.info_bar.show_page(self.file_list.index, self.file_list.count)
-
-        self._position_info_bar()
-
-        # 更新 EXIF 面板（如果可见）
-
+        )
+        self.info_bar.show_page(self.file_list.index, self.file_list.count)
+        self._position_info_bar()
         if not self.exif_panel.isHidden():
             self._queue_exif(path)
-
     def _queue_exif(self, path: Path):
         """延迟读取 EXIF，并丢弃已经过期的请求。"""
         self._exif_generation += 1
@@ -734,15 +731,77 @@ class MainWindow(QMainWindow):
 
     # ── 保存 / 另存为 ──
 
-    _EXT_FMT = {
+    _EXT_FMT = {
 
         ".jpg": "JPEG", ".jpeg": "JPEG",
 
         ".png": "PNG", ".bmp": "BMP",
 
         ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF", ".ico": "ICO",
-
-    }
+
+    }
+
+    @staticmethod
+    def _preserve_exif(source: Path, encoded: Path, fmt: str):
+        """尽量复制 EXIF；显示图像已应用方向，因此将方向标记归一化。"""
+        if fmt not in {"JPEG", "PNG", "TIFF", "WEBP"}:
+            return
+        try:
+            with PILImage.open(source) as source_image:
+                exif = source_image.getexif()
+                if not exif:
+                    return
+                source_info = dict(source_image.info)
+
+            exif[274] = 1
+            fd, metadata_name = tempfile.mkstemp(
+                prefix=f".{encoded.stem}-metadata-",
+                suffix=encoded.suffix,
+                dir=str(encoded.parent),
+            )
+            os.close(fd)
+            metadata_path = Path(metadata_name)
+            try:
+                with PILImage.open(encoded) as output_image:
+                    save_kwargs = {"exif": exif.tobytes()}
+                    for key in ("icc_profile", "dpi"):
+                        if key in source_info:
+                            save_kwargs[key] = source_info[key]
+                    output_image.save(metadata_path, format=fmt, **save_kwargs)
+                os.replace(metadata_path, encoded)
+            finally:
+                metadata_path.unlink(missing_ok=True)
+        except Exception:
+            # 元数据不支持或源文件不是 Pillow 可读格式时，不影响图像本身保存。
+            return
+
+    @classmethod
+    def _save_pixmap_atomic(
+        cls,
+        pix,
+        target: Path,
+        fmt: str,
+        source: Path | None = None,
+    ) -> bool:
+        """先写同目录临时文件，再替换目标，避免半写文件破坏原图。"""
+        try:
+            fd, temp_name = tempfile.mkstemp(
+                prefix=f".{target.stem}-", suffix=target.suffix, dir=str(target.parent)
+            )
+            os.close(fd)
+            temp_path = Path(temp_name)
+            try:
+                quality = 95 if fmt == "JPEG" else -1
+                if not pix.save(str(temp_path), fmt, quality):
+                    return False
+                if source is not None and source.exists():
+                    cls._preserve_exif(source, temp_path, fmt)
+                os.replace(temp_path, target)
+                return True
+            finally:
+                temp_path.unlink(missing_ok=True)
+        except (OSError, ValueError):
+            return False
 
     def _save_image(self):
 
@@ -766,7 +825,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "保存失败", "SVG 图片不支持直接覆盖保存，请使用另存为导出")
             return
 
-        if not pix.save(str(self._current_path), fmt):
+        if not self._save_pixmap_atomic(
+            pix, self._current_path, fmt, source=self._current_path
+        ):
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
         else:
@@ -806,7 +867,9 @@ class MainWindow(QMainWindow):
         except OSError:
             pass
 
-        if not pix.save(path, fmt):
+        if not self._save_pixmap_atomic(
+            pix, Path(path), fmt, source=self._current_path
+        ):
 
             QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
         else:

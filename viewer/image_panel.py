@@ -3,9 +3,11 @@
 
 import os
 
-from PyQt6.QtCore import Qt, QRectF, QRect, QPoint, pyqtSignal
+from PyQt6.QtCore import (
+    Qt, QRectF, QRect, QPoint, QObject, QRunnable, QThreadPool, pyqtSignal,
+)
 from PyQt6.QtGui import (
-    QPixmap, QPainter, QColor, QBrush, QTransform,
+    QImage, QPixmap, QPainter, QColor, QBrush, QTransform,
     QPen, QFont, QFontMetrics, QAction, QImageReader,
 )
 from PyQt6.QtWidgets import (
@@ -18,6 +20,51 @@ from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
 
 # 显示用解码长边上限：超过则缩小解码，保存/裁剪时再按全分辨率处理
 _DISPLAY_MAX = 3840
+
+
+def _decode_display_image(path: str):
+    """在线程中解码显示图像，只返回线程安全的 QImage。"""
+    try:
+        reader = QImageReader(path)
+        reader.setAutoTransform(True)
+        size = reader.size()
+        image_size = (
+            (size.width(), size.height())
+            if size.isValid()
+            else None
+        )
+        if size.isValid() and max(size.width(), size.height()) > _DISPLAY_MAX:
+            reader.setScaledSize(
+                size.scaled(
+                    _DISPLAY_MAX,
+                    _DISPLAY_MAX,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                )
+            )
+        image = reader.read()
+        if image.isNull():
+            return QImage(), image_size
+        return image, image_size or (image.width(), image.height())
+    except Exception:
+        return QImage(), None
+
+
+class _ImageDecodeSignals(QObject):
+    finished = pyqtSignal(int, str, object, object)
+
+
+class _ImageDecodeTask(QRunnable):
+    def __init__(self, request_id: int, path: str):
+        super().__init__()
+        self.request_id = request_id
+        self.path = path
+        self.signals = _ImageDecodeSignals()
+
+    def run(self):
+        image, image_size = _decode_display_image(self.path)
+        self.signals.finished.emit(
+            self.request_id, self.path, image, image_size
+        )
 
 
 class _CropOverlay(QWidget):
@@ -187,6 +234,7 @@ class ImagePanel(QGraphicsView):
     cropCancelled = pyqtSignal()
     toggleCropRequested = pyqtSignal()
     saveRequested = pyqtSignal()
+    imageLoadFinished = pyqtSignal(str, bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -204,6 +252,9 @@ class ImagePanel(QGraphicsView):
         self._rotation = 0          # 0/90/180/270
         self._dirty = False         # 是否存在尚未保存的旋转/裁剪
         self._full_path: str | None = None  # 磁盘原图路径；裁剪/编辑后置 None
+        self._decode_generation = 0
+        self._pending_decode_path: str | None = None
+        self._decode_tasks: dict[int, _ImageDecodeTask] = {}
 
         # ── 图片缓存（LRU，避免翻页时重复解码） ──
         self._cache: OrderedDict[
@@ -395,53 +446,16 @@ class ImagePanel(QGraphicsView):
         self._zoom_label.setVisible(False)
         self._bottom_toolbar.hide()
 
-    def load_image(self, path: str) -> bool:
-        """加载图片，适应窗口显示（大图缩小解码，翻页更快）"""
-        if not path:
-            self._clear_image()
-            return True
-
+    def _apply_loaded_pixmap(
+        self,
+        path: str,
+        pix: QPixmap,
+        image_size: tuple[int, int],
+        signature: tuple[int, int] | None,
+    ):
         key = self._cache_key(path)
-        signature = self._file_signature(path)
-
-        # 缓存命中：直接使用内存中的 pixmap，跳过磁盘解码
-        entry = self._cache.get(key)
-        if entry and signature is not None and entry[1] == signature:
-            self._source = entry[0]
-            self._image_size = entry[2]
-            self._cache.move_to_end(key)
-            self._rotation = 0
-            self._dirty = False
-            self._zoom = None
-            self._full_path = path
-            self._refresh()
-            return True
-        if entry:
-            self._remove_cached(key)
-
-        # 缩小解码：长边超过 _DISPLAY_MAX 时按比例缩小，避免全尺寸同步解码卡顿
-        reader = QImageReader(path)
-        reader.setAutoTransform(True)  # 应用 EXIF 方向
-        size = reader.size()
-        if size.isValid() and max(size.width(), size.height()) > _DISPLAY_MAX:
-            reader.setScaledSize(
-                size.scaled(_DISPLAY_MAX, _DISPLAY_MAX, Qt.AspectRatioMode.KeepAspectRatio)
-            )
-        img = reader.read()
-        if img.isNull():
-            self._clear_image()
-            return False
-        pix = QPixmap.fromImage(img)
-        image_size = (
-            (size.width(), size.height())
-            if size.isValid()
-            else (pix.width(), pix.height())
-        )
-
-        # 写入 LRU 缓存
         if signature is not None:
             self._cache_pixmap(key, pix, signature, image_size)
-
         self._source = pix
         self._image_size = image_size
         self._rotation = 0
@@ -449,7 +463,92 @@ class ImagePanel(QGraphicsView):
         self._zoom = None
         self._full_path = path
         self._refresh()
+
+    def _load_cached(self, path: str, signature: tuple[int, int] | None) -> bool:
+        key = self._cache_key(path)
+        entry = self._cache.get(key)
+        if not entry:
+            return False
+        if signature is None or entry[1] != signature:
+            self._remove_cached(key)
+            return False
+        self._source = entry[0]
+        self._image_size = entry[2]
+        self._cache.move_to_end(key)
+        self._rotation = 0
+        self._dirty = False
+        self._zoom = None
+        self._full_path = path
+        self._refresh()
         return True
+
+    def load_image(self, path: str) -> bool:
+        """同步加载图片，保留给外部调用和兼容旧接口。"""
+        self._decode_generation += 1
+        self._pending_decode_path = None
+        if not path:
+            self._clear_image()
+            return True
+
+        signature = self._file_signature(path)
+        if self._load_cached(path, signature):
+            return True
+
+        image, image_size = _decode_display_image(path)
+        if image.isNull() or image_size is None:
+            self._clear_image()
+            return False
+        pix = QPixmap.fromImage(image)
+        self._apply_loaded_pixmap(path, pix, image_size, signature)
+        return True
+
+    def load_image_async(self, path: str):
+        """异步加载显示图像，过期解码结果会被丢弃。"""
+        self._decode_generation += 1
+        request_id = self._decode_generation
+        self._pending_decode_path = path
+        if not path:
+            self._pending_decode_path = None
+            self._clear_image()
+            self.imageLoadFinished.emit(path, True)
+            return True
+
+        signature = self._file_signature(path)
+        if self._load_cached(path, signature):
+            self._pending_decode_path = None
+            self.imageLoadFinished.emit(path, True)
+            return True
+
+        self._clear_image()
+        task = _ImageDecodeTask(request_id, path)
+        self._decode_tasks[request_id] = task
+        task.signals.finished.connect(self._on_decode_finished)
+        QThreadPool.globalInstance().start(task)
+        return None
+
+    def _on_decode_finished(
+        self,
+        request_id: int,
+        path: str,
+        image: QImage,
+        image_size: tuple[int, int] | None,
+    ):
+        self._decode_tasks.pop(request_id, None)
+        if (
+            request_id != self._decode_generation
+            or path != self._pending_decode_path
+        ):
+            return
+        self._pending_decode_path = None
+        if image.isNull() or image_size is None:
+            self._clear_image()
+            self.imageLoadFinished.emit(path, False)
+            return
+        pix = QPixmap.fromImage(image)
+        self._apply_loaded_pixmap(
+            path, pix, image_size, self._file_signature(path)
+        )
+        self.imageLoadFinished.emit(path, True)
 
     @property
     def has_image(self) -> bool:

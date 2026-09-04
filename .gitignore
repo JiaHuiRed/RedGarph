@@ -1,5 +1,6 @@
 # RedCode 本地记忆/配置（不进入开源仓库）
 .redcode/
+.attachments/
 
 __pycache__/
 *.pyc

@@ -4,17 +4,19 @@
 
 import ctypes
 import ctypes.wintypes  # 确保 PyInstaller 打包时包含该模块
-import subprocess
+import os
+import subprocess
+import tempfile
 
-from pathlib import Path
+from pathlib import Path
+
+from PIL import Image as PILImage
 
-from PyQt6.QtCore import (
-    Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer, QIODevice, QSaveFile,
-)
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
 
 from PyQt6.QtGui import (
     QAction, QMouseEvent, QDragEnterEvent, QDropEvent, QPainter, QColor,
-    QCursor, QRegion, QKeySequence,
+    QCursor, QRegion,
 )
 
 from PyQt6.QtWidgets import (
@@ -152,6 +154,9 @@ class MainWindow(QMainWindow):
         self._current_path: Path | None = None
         self._loaded_index = -1
         self._reverting_navigation = False
+        self._exif_generation = 0
+        self._shortcut_actions: list[QAction] = []
+        self._pending_folder_dialog: Path | None = None
 
         # ── 无框窗口 ──
 
@@ -191,18 +196,54 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
 
-        self._connect_signals()
-
-
-
-    # ── 构建 UI ──
+        self._connect_signals()
+        self._install_navigation_shortcuts()
 
-    @staticmethod
-    def _bind_shortcut(action: QAction, sequence: str):
-        action.setShortcut(QKeySequence(sequence))
-        action.setShortcutContext(Qt.ShortcutContext.WindowShortcut)
+    def _register_shortcut(self, action: QAction, sequence: str):
+        """让菜单动作在应用内始终生效，即使焦点位于图片子控件。"""
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.addAction(action)
 
-    def _build_titlebar(self):
+    def _add_shortcut(self, sequence: str, callback):
+        action = QAction(self)
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        action.triggered.connect(callback)
+        self.addAction(action)
+        self._shortcut_actions.append(action)
+
+    def _install_navigation_shortcuts(self):
+        self._add_shortcut("Left", self._previous_image)
+        self._add_shortcut("Right", self._next_image)
+        self._add_shortcut("R", self.image_panel.rotate_right)
+        self._add_shortcut("Shift+R", self.image_panel.rotate_left)
+        self._add_shortcut("F", self._toggle_fullscreen)
+        self._add_shortcut("F11", self._toggle_fullscreen)
+        self._add_shortcut("Ctrl+0", self.image_panel.fit_to_window)
+        self._add_shortcut("Ctrl+1", self.image_panel.actual_size)
+
+    def _previous_image(self):
+        self._stop_slideshow()
+        self.file_list.prev_image()
+
+    def _next_image(self):
+        self._stop_slideshow()
+        self.file_list.next_image()
+
+    def _toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+            self.titlebar.setVisible(True)
+        else:
+            self.showFullScreen()
+            self.titlebar.setVisible(False)
+
+
+
+    # ── 构建 UI ──
+
+    def _build_titlebar(self):
 
         """构建 macOS 风格标题栏 + 菜单"""
 
@@ -220,9 +261,9 @@ class MainWindow(QMainWindow):
 
         menu_btn.setObjectName("MenuButton")
 
-        menu_btn.setFixedSize(28, 22)
+        menu_btn.setFixedSize(32, 26)
 
-        menu_btn.setCursor(Qt.CursorShape.ArrowCursor)
+        menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
         menu_btn.setFlat(True)
 
@@ -230,57 +271,57 @@ class MainWindow(QMainWindow):
 
         # 文件
 
-        act_open = QAction("打开文件夹...", self)
-        self._bind_shortcut(act_open, "Ctrl+O")
+        act_open = QAction("打开文件夹...", self)
         act_open.triggered.connect(self._open_folder)
-        menu.addAction(act_open)
+        self._register_shortcut(act_open, "Ctrl+O")
+        menu.addAction(act_open)
 
         menu.addSeparator()
 
         # 保存
 
-        act_save = QAction("保存", self)
-        self._bind_shortcut(act_save, "Ctrl+S")
+        act_save = QAction("保存", self)
         act_save.triggered.connect(self._save_image)
-        menu.addAction(act_save)
+        self._register_shortcut(act_save, "Ctrl+S")
+        menu.addAction(act_save)
 
-        act_save_as = QAction("另存为...", self)
-        self._bind_shortcut(act_save_as, "Ctrl+Shift+S")
+        act_save_as = QAction("另存为...", self)
         act_save_as.triggered.connect(self._save_image_as)
-        menu.addAction(act_save_as)
+        self._register_shortcut(act_save_as, "Ctrl+Shift+S")
+        menu.addAction(act_save_as)
 
         menu.addSeparator()
 
         # 复制
 
-        act_copy = QAction("复制图片", self)
-        self._bind_shortcut(act_copy, "Ctrl+C")
+        act_copy = QAction("复制图片", self)
         act_copy.triggered.connect(self._copy_to_clipboard)
-        menu.addAction(act_copy)
+        self._register_shortcut(act_copy, "Ctrl+C")
+        menu.addAction(act_copy)
 
         menu.addSeparator()
 
         # 文件操作
 
-        act_show = QAction("在资源管理器中显示", self)
-        self._bind_shortcut(act_show, "Ctrl+Shift+E")
+        act_show = QAction("在资源管理器中显示", self)
         act_show.triggered.connect(self._show_in_explorer)
-        menu.addAction(act_show)
+        self._register_shortcut(act_show, "Ctrl+Shift+E")
+        menu.addAction(act_show)
 
-        act_delete = QAction("删除到回收站", self)
-        self._bind_shortcut(act_delete, "Delete")
+        act_delete = QAction("删除到回收站", self)
         act_delete.triggered.connect(self._delete_current)
-        menu.addAction(act_delete)
+        self._register_shortcut(act_delete, "Delete")
+        menu.addAction(act_delete)
 
         menu.addSeparator()
 
         # 幻灯片
 
-        self._act_slideshow = QAction("幻灯片播放", self)
-        self._act_slideshow.setCheckable(True)
-        self._bind_shortcut(self._act_slideshow, "Space")
+        self._act_slideshow = QAction("幻灯片播放", self)
+        self._act_slideshow.setCheckable(True)
         self._act_slideshow.triggered.connect(self._toggle_slideshow)
-        menu.addAction(self._act_slideshow)
+        self._register_shortcut(self._act_slideshow, "Space")
+        menu.addAction(self._act_slideshow)
 
         act_slideshow_interval = QAction("间隔调节...", self)
         act_slideshow_interval.triggered.connect(self._adjust_slideshow_interval)
@@ -290,30 +331,30 @@ class MainWindow(QMainWindow):
 
         # EXIF 信息面板
 
-        self._act_exif = QAction("EXIF 信息", self)
+        self._act_exif = QAction("EXIF 信息", self)
         self._act_exif.setCheckable(True)
-        self._act_exif.setChecked(self.exif_panel.isVisible())
-        self._bind_shortcut(self._act_exif, "Ctrl+E")
+        self._act_exif.setChecked(True)
         self._act_exif.triggered.connect(self._toggle_exif)
-        menu.addAction(self._act_exif)
+        self._register_shortcut(self._act_exif, "Ctrl+E")
+        menu.addAction(self._act_exif)
 
         # 显示信息
 
-        self._act_info = QAction("显示信息", self)
-        self._act_info.setCheckable(True)
-        self._bind_shortcut(self._act_info, "I")
+        self._act_info = QAction("显示信息", self)
+        self._act_info.setCheckable(True)
         self._act_info.triggered.connect(self._toggle_info)
-        menu.addAction(self._act_info)
+        self._register_shortcut(self._act_info, "I")
+        menu.addAction(self._act_info)
 
         menu.addSeparator()
 
         # 裁剪模式
 
-        self._act_crop = QAction("裁剪模式", self)
-        self._act_crop.setCheckable(True)
-        self._bind_shortcut(self._act_crop, "Ctrl+Shift+C")
+        self._act_crop = QAction("裁剪模式", self)
+        self._act_crop.setCheckable(True)
         self._act_crop.triggered.connect(self._toggle_crop)
-        menu.addAction(self._act_crop)
+        self._register_shortcut(self._act_crop, "Ctrl+Shift+C")
+        menu.addAction(self._act_crop)
 
         menu.addSeparator()
 
@@ -347,9 +388,9 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
-        act_quit = QAction("退出", self)
-        self._bind_shortcut(act_quit, "Ctrl+Q")
+        act_quit = QAction("退出", self)
         act_quit.triggered.connect(self.close)
+        self._register_shortcut(act_quit, "Ctrl+Q")
         menu.addAction(act_quit)
 
         menu_btn.setMenu(menu)
@@ -438,34 +479,35 @@ class MainWindow(QMainWindow):
 
         """连接组件信号"""
 
-        self.file_list.currentChanged.connect(self._on_index_changed)
+        self.file_list.currentChanged.connect(self._on_index_changed)
+        self.file_list.directoryLoadFinished.connect(self._on_directory_load_finished)
 
-        self.file_list.filesChanged.connect(self._update_ui)
-
-        self.slideshow.nextRequested.connect(self._slideshow_next)
+        self.slideshow.nextRequested.connect(self._slideshow_next)
 
         self.slideshow.intervalChanged.connect(self._on_slideshow_interval_changed)
 
-        self.image_panel.cropConfirmed.connect(lambda: self._act_crop.setChecked(False))
+        self.image_panel.cropConfirmed.connect(lambda: self._act_crop.setChecked(False))
 
         self.image_panel.cropCancelled.connect(lambda: self._act_crop.setChecked(False))
 
         self.image_panel.toggleCropRequested.connect(self._toggle_crop)
 
         self.image_panel.saveRequested.connect(self._save_image)
+        self.image_panel.imageLoadFinished.connect(self._on_image_load_finished)
 
     def _on_slideshow_interval_changed(self, sec: int):
 
         self._slideshow_interval = sec
 
-        self.info_bar.show_info(
-            self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
-        )
+        self.info_bar.show_info(
+            self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
+            dimensions=self.image_panel.image_size,
+        )
 
-    # ── 文件操作 ──
-
+    # ── 文件操作 ──
+
     def _confirm_pending_changes(self) -> bool:
-        if not self.image_panel.is_modified:
+        if not self.image_panel.is_dirty:
             return True
 
         name = self._current_path.name if self._current_path else "当前图片"
@@ -497,49 +539,35 @@ class MainWindow(QMainWindow):
         if not self._confirm_pending_changes():
             return
 
-        if self.file_list.load_directory(d):
-
-            self._update_ui()
-
-        else:
-
-            QMessageBox.information(self, "提示", "文件夹中没有找到图片")
+        self._pending_folder_dialog = Path(d)
+        self.file_list.load_directory_async(d)
+
+    def _on_directory_load_finished(self, path: Path, has_images: bool):
+        if self._pending_folder_dialog != path:
+            return
+        self._pending_folder_dialog = None
+        if not has_images:
+            QMessageBox.information(self, "提示", "文件夹中没有找到图片")
 
     def load_path(self, path: str | Path):
 
         """从外部路径加载（拖拽或命令行）"""
 
-        p = Path(path)
+        p = Path(path)
+        self._pending_folder_dialog = None
 
-        if p.is_dir():
+        if p.is_dir():
+
             if not self._confirm_pending_changes():
                 return
-
+            self.file_list.load_directory_async(p)
 
-            self.file_list.load_directory(p)
+        elif p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
 
-            self._update_ui()
-
-        elif p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
             if not self._confirm_pending_changes():
                 return
-
+            self.file_list.load_directory_async(p.parent, selected=p)
 
-            self.file_list.load_directory(p.parent)
-
-            idx = next(
-
-                (i for i, f in enumerate(self.file_list.files) if f == p),
-
-                -1,
-
-            )
-
-            if idx >= 0:
-
-                self.file_list.go_to(idx)
-
-            self._update_ui()
 
     # ── UI 更新 ──
 
@@ -552,74 +580,84 @@ class MainWindow(QMainWindow):
         idx = self.file_list.index
 
         if files and idx >= 0:
-
-            self._load_current()
             self._loaded_index = idx
 
-        else:
+            self._load_current()
 
-            self.image_panel.load_image("")
-
+        else:
+
+            self.image_panel.load_image("")
+
             self._current_path = None
 
             self.titlebar.set_title("RedGarph")
+
+            self.info_bar.show_info(None)
+            self.exif_panel.clear_exif()
+            self._exif_generation += 1
             self._loaded_index = -1
 
-    def _load_current(self):
-
-        """加载当前索引的图片"""
-
-        path = self.file_list.current
-
-        if not path:
-
-            return
-
-        self._current_path = path
-
-        # 图片解码期间不主动处理全局事件，避免导航流程发生重入。
-        if not self.image_panel.load_image(str(path)):
-            self.titlebar.set_title(f"RedGarph — 无法读取：{path.name}")
-            self.info_bar.show_info(path, extra="无法读取图片")
-            self.info_bar.show_page(self.file_list.index, self.file_list.count)
-            self._position_info_bar()
+    def _load_current(self):
+        """异步加载当前索引的图片"""
+        path = self.file_list.current
+        if not path:
+            return
+        self._current_path = path
+        self._exif_generation += 1
+        self.titlebar.set_title(f"RedGarph — {path.name}")
+        self.info_bar.show_info(None, extra="加载中...")
+        self.exif_panel.clear_exif()
+        self.image_panel.load_image_async(str(path))
+
+    def _on_image_load_finished(self, path_str: str, success: bool):
+        path = Path(path_str)
+        if self._current_path != path or self.file_list.current != path:
+            return
+        if not success:
+            self.info_bar.show_info(None, extra="无法加载图片")
+            self.exif_panel.clear_exif()
             return
 
         self.titlebar.set_title(f"RedGarph — {path.name}")
-
-        # 更新信息栏
-
-        self.info_bar.show_info(
-            path,
-            self.image_panel.source,
-            extra=f"幻灯片间隔：{self._slideshow_interval}s",
-        )
-
-        self.info_bar.show_page(self.file_list.index, self.file_list.count)
-
-        self._position_info_bar()
-
-        # 更新 EXIF 面板（如果可见）
-
-        if self.exif_panel.isVisible():
-
-            # 延迟到事件循环空闲再读 EXIF，不阻塞首屏
-            QTimer.singleShot(0, lambda p=path: self.exif_panel.set_image(str(p)))
-
-    def _on_index_changed(self, index: int):
-        if index < 0 or self._reverting_navigation:
-            return
+        self.info_bar.show_info(
+            path,
+            self.image_panel.source,
+            extra=f"幻灯片间隔：{self._slideshow_interval}s",
+            dimensions=self.image_panel.image_size,
+        )
+        self.info_bar.show_page(self.file_list.index, self.file_list.count)
+        self._position_info_bar()
+        if not self.exif_panel.isHidden():
+            self._queue_exif(path)
+    def _queue_exif(self, path: Path):
+        """延迟读取 EXIF，并丢弃已经过期的请求。"""
+        self._exif_generation += 1
+        generation = self._exif_generation
+        QTimer.singleShot(
+            0,
+            lambda p=path, g=generation: self._load_exif_if_current(p, g),
+        )
 
-        if not self._confirm_pending_changes():
+    def _load_exif_if_current(self, path: Path, generation: int):
+        if (
+            generation != self._exif_generation
+            or self.exif_panel.isHidden()
+            or self._current_path != path
+        ):
+            return
+        self.exif_panel.set_image_async(str(path))
+
+    def _on_index_changed(self, index: int):
+        if self._reverting_navigation:
+            return
+        if index >= 0 and not self._confirm_pending_changes():
             if 0 <= self._loaded_index < self.file_list.count:
                 self._reverting_navigation = True
                 self.file_list.go_to(self._loaded_index)
                 self._reverting_navigation = False
             return
+        self._update_ui()
 
-        self._load_current()
-        self._loaded_index = index
-
     # ── 幻灯片 ──
 
     def _toggle_slideshow(self):
@@ -654,17 +692,19 @@ class MainWindow(QMainWindow):
 
     # ── EXIF 面板 ──
 
-    def _toggle_exif(self):
-
-        self.exif_panel.toggle()
-
-        self._act_exif.setChecked(self.exif_panel.isVisible())
-
-        # 切换时刷新当前图片的 EXIF
-
-        if self.exif_panel.isVisible() and self._current_path:
-
-            self.exif_panel.set_image(str(self._current_path))
+    def _toggle_exif(self):
+
+        self.exif_panel.toggle()
+
+        is_enabled = not self.exif_panel.isHidden()
+        self._act_exif.setChecked(is_enabled)
+
+        # 切换时刷新当前图片的 EXIF
+
+        if is_enabled and self._current_path:
+            self._queue_exif(self._current_path)
+        else:
+            self._exif_generation += 1
 
     # ── 裁剪模式 ──
 
@@ -684,11 +724,11 @@ class MainWindow(QMainWindow):
 
     # ── 信息栏 ──
 
-    def _toggle_info(self):
-
-        self.info_bar.toggle()
-
-        self._act_info.setChecked(self.info_bar.isVisible())
+    def _toggle_info(self):
+
+        self.info_bar.toggle()
+
+        self._act_info.setChecked(not self.info_bar.isHidden())
 
     def _position_info_bar(self):
 
@@ -734,52 +774,103 @@ class MainWindow(QMainWindow):
 
         ".png": "PNG", ".bmp": "BMP",
 
-        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF",
+        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF", ".ico": "ICO",
 
     }
 
     @staticmethod
-    def _save_pixmap(pix, path: str | Path, fmt: str) -> bool:
-        """通过临时文件原子提交，避免保存失败时破坏原图。"""
-        save_file = QSaveFile(str(path))
+    def _preserve_exif(source: Path, encoded: Path, fmt: str):
+        """尽量复制 EXIF；显示图像已应用方向，因此将方向标记归一化。"""
+        if fmt not in {"JPEG", "PNG", "TIFF", "WEBP"}:
+            return
         try:
-            if not save_file.open(QIODevice.OpenModeFlag.WriteOnly):
-                return False
-            if not pix.save(save_file, fmt):
-                save_file.cancelWriting()
-                return False
-            return save_file.commit()
-        except (OSError, RuntimeError):
-            save_file.cancelWriting()
-            return False
+            with PILImage.open(source) as source_image:
+                exif = source_image.getexif()
+                if not exif:
+                    return
+                source_info = dict(source_image.info)
 
-    def _save_image(self):
+            exif[274] = 1
+            fd, metadata_name = tempfile.mkstemp(
+                prefix=f".{encoded.stem}-metadata-",
+                suffix=encoded.suffix,
+                dir=str(encoded.parent),
+            )
+            os.close(fd)
+            metadata_path = Path(metadata_name)
+            try:
+                with PILImage.open(encoded) as output_image:
+                    save_kwargs = {"exif": exif.tobytes()}
+                    for key in ("icc_profile", "dpi"):
+                        if key in source_info:
+                            save_kwargs[key] = source_info[key]
+                    output_image.save(metadata_path, format=fmt, **save_kwargs)
+                os.replace(metadata_path, encoded)
+            finally:
+                metadata_path.unlink(missing_ok=True)
+        except Exception:
+            # 元数据不支持或源文件不是 Pillow 可读格式时，不影响图像本身保存。
+            return
+
+    @classmethod
+    def _save_pixmap_atomic(
+        cls,
+        pix,
+        target: Path,
+        fmt: str,
+        source: Path | None = None,
+    ) -> bool:
+        """先写同目录临时文件，再替换目标，避免半写文件破坏原图。"""
+        try:
+            fd, temp_name = tempfile.mkstemp(
+                prefix=f".{target.stem}-", suffix=target.suffix, dir=str(target.parent)
+            )
+            os.close(fd)
+            temp_path = Path(temp_name)
+            try:
+                quality = 95 if fmt == "JPEG" else -1
+                if not pix.save(str(temp_path), fmt, quality):
+                    return False
+                if source is not None and source.exists():
+                    cls._preserve_exif(source, temp_path, fmt)
+                os.replace(temp_path, target)
+                return True
+            finally:
+                temp_path.unlink(missing_ok=True)
+        except (OSError, ValueError):
+            return False
+
+    def _save_image(self) -> bool:
 
         """Ctrl+S — 覆盖保存（保留当前旋转/裁剪状态）"""
 
         if not self._current_path:
-
             return False
+
+        if not self.image_panel.is_dirty:
+            return True
 
         pix = self.image_panel.full_res_pixmap()
 
         if pix.isNull():
-
             return False
 
-        fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
-
-        saved = self._save_pixmap(pix, self._current_path, fmt)
-        if not saved:
-
-            QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
-
-        else:
-            self.image_panel.invalidate_cache(self._current_path)
-            self.image_panel.mark_saved()
-        return saved
+        fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
+        if not fmt:
+            QMessageBox.warning(self, "保存失败", "SVG 图片不支持直接覆盖保存，请使用另存为导出")
+            return False
 
-    def _save_image_as(self):
+        if not self._save_pixmap_atomic(
+            pix, self._current_path, fmt, source=self._current_path
+        ):
+            QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
+            return False
+
+        self.image_panel.invalidate_cache(str(self._current_path))
+        self._load_current()
+        return True
+
+    def _save_image_as(self):
 
         """Ctrl+Shift+S — 另存为"""
 
@@ -787,33 +878,42 @@ class MainWindow(QMainWindow):
 
             return
 
-        pix = self.image_panel.full_res_pixmap()
-
-        if pix.isNull():
-
-            return
-
-        path, _ = QFileDialog.getSaveFileName(
-            self, "另存为", str(self._current_path),
-            "图片 (*.png *.jpg *.bmp *.webp *.tiff);;所有文件 (*)",
+        path, _ = QFileDialog.getSaveFileName(
+            self, "另存为", str(self._current_path),
+            "图片 (*.png *.jpg *.bmp *.webp *.tiff *.ico);;所有文件 (*)",
         )
-
-        if not path:
-
-            return
-
-        fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
-
-        saved = self._save_pixmap(pix, path, fmt)
-        if not saved:
-
-            QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
-
+
+        if not path:
+
+            return
+
+        fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
+        if not fmt:
+            QMessageBox.warning(self, "保存失败", "仅支持 PNG、JPEG、BMP、WEBP、TIFF 和 ICO 格式")
+            return
+
+        pix = self.image_panel.full_res_pixmap()
+
+        if pix.isNull():
+            return
+
+        same_path = False
+        try:
+            same_path = Path(path).resolve() == self._current_path.resolve()
+        except OSError:
+            pass
+
+        if not self._save_pixmap_atomic(
+            pix, Path(path), fmt, source=self._current_path
+        ):
+
+            QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
         else:
             self.image_panel.invalidate_cache(path)
-            self.image_panel.mark_saved()
-
-    # ── 剪贴板 ──
+            if same_path:
+                self._load_current()
+
+    # ── 剪贴板 ──
 
     def _copy_to_clipboard(self):
 
@@ -835,10 +935,7 @@ class MainWindow(QMainWindow):
 
             return
 
-        try:
-            subprocess.Popen(["explorer", f"/select,{self._current_path}"])
-        except OSError:
-            QMessageBox.warning(self, "操作失败", "无法打开资源管理器")
+        subprocess.Popen(["explorer", f"/select,{self._current_path}"])
 
     # ── 删除到回收站 ──
 
@@ -861,7 +958,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "删除失败", f"无法移至回收站：{name}")
             return
 
-        self.file_list.remove_current()
+        self.image_panel.invalidate_cache(str(path))
+        self.file_list.remove_current()
 
     @staticmethod
 
@@ -883,7 +981,7 @@ class MainWindow(QMainWindow):
 
                 ("fFlags",  ctypes.c_ushort),
 
-                ("fAborted",ctypes.c_bool),
+                ("fAborted",ctypes.wintypes.BOOL),
 
                 ("hMapping",ctypes.c_void_p),
 
@@ -905,11 +1003,7 @@ class MainWindow(QMainWindow):
 
         )
 
-        try:
-            result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
-        except (AttributeError, OSError):
-            return False
-        return result == 0 and not op.fAborted
+        return ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0
 
     # ── 关于 ──
 

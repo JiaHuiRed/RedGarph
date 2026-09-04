@@ -8,9 +8,14 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-python -c "import PyQt6" >nul 2>&1
+python -c "import PyQt6, PIL" >nul 2>&1
 if %errorlevel% neq 0 (
-    pip install PyQt6
+    python -m pip install -r "%~dp0requirements.txt"
+    if errorlevel 1 (
+        echo Dependency installation failed.
+        pause
+        exit /b 1
+    )
 )
 
 if exist "%~dp0dist\RedGarph\RedGarph.exe" (

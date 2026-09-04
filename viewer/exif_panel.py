@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 from PIL.ExifTags import TAGS as EXIF_TAGS
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QObject, QRunnable, QThreadPool, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
@@ -61,7 +61,7 @@ def _format_enum(v):
 
 
 # ── 需要展示的 EXIF 字段（tag_id → (标签名, 格式化函数)） ──
-_EXIF_FIELDS: dict[int, tuple[str, Callable]] = {
+_EXIF_FIELDS: dict[int, tuple[str, Callable]] = {
     271: ("相机品牌", str),
     272: ("相机型号", str),
     305: ("软件", str),
@@ -90,7 +90,79 @@ _EXIF_FIELDS: dict[int, tuple[str, Callable]] = {
     41986: ("对比度", _format_enum),
     41987: ("饱和度", _format_enum),
     41988: ("锐度", _format_enum),
-}
+}
+
+
+class _ExifSignals(QObject):
+    finished = pyqtSignal(int, str, object)
+
+
+def _read_exif_rows(path: str | Path) -> list[tuple[str, str]]:
+    """在工作线程读取并格式化 EXIF，避免把 PIL 调用放进界面线程。"""
+    fp = Path(path)
+    try:
+        stat = fp.stat()
+        rows: list[tuple[str, str]] = [
+            ("文件名", fp.name),
+            ("大小", _format_size(stat.st_size)),
+            (
+                "修改时间",
+                datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            ),
+        ]
+
+        raw = {}
+        try:
+            with Image.open(str(fp)) as img:
+                w, h = img.size
+                rows.append(("尺寸", f"{w} × {h} px"))
+                try:
+                    raw = dict(img.getexif())
+                except Exception:
+                    pass
+        except Exception:
+            rows.append(("尺寸", "无法读取"))
+
+        if raw:
+            exif_rows: list[tuple[str, str]] = []
+            for tag_id, (label, fmt) in _EXIF_FIELDS.items():
+                raw_val = raw.get(tag_id)
+                if raw_val is None:
+                    continue
+                try:
+                    val_str = fmt(raw_val)
+                except Exception:
+                    val_str = str(raw_val)
+                exif_rows.append((label, str(val_str)))
+
+            if exif_rows:
+                rows.append(("─── EXIF ───", ""))
+                rows.extend(exif_rows)
+
+                mapped_ids = set(_EXIF_FIELDS.keys())
+                extras: list[tuple[str, str]] = []
+                for tag_id, raw_val in raw.items():
+                    if tag_id in mapped_ids or tag_id == 0:
+                        continue
+                    name = EXIF_TAGS.get(tag_id, f"0x{tag_id:04X}")
+                    extras.append((str(name), str(raw_val)[:60]))
+                rows.extend(extras[:20])
+
+        return rows
+    except Exception:
+        return [("信息", "无法读取")]
+
+
+class _ExifTask(QRunnable):
+    def __init__(self, request_id: int, path: str):
+        super().__init__()
+        self.request_id = request_id
+        self.path = path
+        self.signals = _ExifSignals()
+
+    def run(self):
+        rows = _read_exif_rows(self.path)
+        self.signals.finished.emit(self.request_id, self.path, rows)
 
 
 class ExifPanel(QWidget):
@@ -102,17 +174,21 @@ class ExifPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("exifPanel")
         self.setMinimumWidth(180)
-        self.setVisible(True)
+        self.setVisible(True)
+        self._request_id = 0
+        self._active_path: str | None = None
+        self._exif_tasks: dict[int, _ExifTask] = {}
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setContentsMargins(12, 10, 12, 12)
+        layout.setSpacing(8)
 
         # ── 标题 ──
         title = QLabel("信息")
         title.setObjectName("exifTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setFixedHeight(32)
+        title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        title.setContentsMargins(0, 0, 0, 0)
+        title.setFixedHeight(30)
         layout.addWidget(title)
 
         # ── 树形列表 ──
@@ -132,78 +208,47 @@ class ExifPanel(QWidget):
             hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self._tree, 1)
 
-    def set_image(self, path: str | Path):
-        """加载图片基本信息 + EXIF 附加信息"""
-        self._tree.clear()
-        fp = Path(path)
-
-        try:
-            # ── 基本信息（总是有） ──
-            items: list[QTreeWidgetItem] = []
-            items.append(QTreeWidgetItem(["文件名", fp.name]))
-            items.append(QTreeWidgetItem([
-                "大小", _format_size(fp.stat().st_size),
-            ]))
-            items.append(QTreeWidgetItem([
-                "修改时间",
-                datetime.fromtimestamp(fp.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
-            ]))
-
-            # 尝试获取图片尺寸 + EXIF（单次打开）
-            raw = {}
-            try:
-                with Image.open(str(fp)) as img:
-                    w, h = img.size
-                    items.append(QTreeWidgetItem(["尺寸", f"{w} × {h} px"]))
-                    try:
-                        raw = dict(img.getexif())
-                    except Exception:
-                        pass
-            except Exception:
-                items.append(QTreeWidgetItem(["尺寸", "无法读取"]))
-
-            self._tree.addTopLevelItems(items)
-
-            # ── EXIF 附加信息 ──
-
-            if raw:
-                exif_items = []
-                for tag_id, (label, fmt) in _EXIF_FIELDS.items():
-                    raw_val = raw.get(tag_id)
-                    if raw_val is None:
-                        continue
-                    try:
-                        val_str = fmt(raw_val)
-                    except Exception:
-                        val_str = str(raw_val)
-                    item = QTreeWidgetItem([label, val_str])
-                    item.setToolTip(1, val_str)
-                    exif_items.append(item)
-
-                if exif_items:
-                    sep = QTreeWidgetItem(["─── EXIF ───", ""])
-                    sep.setFlags(
-                        sep.flags() & ~Qt.ItemFlag.ItemIsSelectable
-                    )
-                    self._tree.addTopLevelItem(sep)
-                    self._tree.addTopLevelItems(exif_items)
-
-                    # 额外未映射的原始标签
-                    mapped_ids = set(_EXIF_FIELDS.keys())
-                    extras = []
-                    for tag_id, raw_val in raw.items():
-                        if tag_id in mapped_ids or tag_id == 0:
-                            continue
-                        name = EXIF_TAGS.get(tag_id, f"0x{tag_id:04X}")
-                        extras.append(QTreeWidgetItem([name, str(raw_val)[:60]]))
-                    if extras:
-                        self._tree.addTopLevelItems(extras[:20])
-
-        except Exception:
-            self._show_empty("无法读取")
-
-    def clear_exif(self):
-        self._tree.clear()
+    def _render_rows(self, rows: list[tuple[str, str]]):
+        self._tree.clear()
+        items = []
+        for label, value in rows:
+            item = QTreeWidgetItem([label, value])
+            if label == "─── EXIF ───":
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            else:
+                item.setToolTip(1, value)
+            items.append(item)
+        self._tree.addTopLevelItems(items)
+
+    def set_image(self, path: str | Path):
+        """同步加载图片信息，保留给外部调用和兼容旧接口。"""
+        self._request_id += 1
+        self._active_path = str(path)
+        self._render_rows(_read_exif_rows(path))
+
+    def set_image_async(self, path: str | Path):
+        """异步加载图片信息，完成后只渲染最后一次请求。"""
+        self._request_id += 1
+        request_id = self._request_id
+        self._active_path = str(path)
+        self._render_rows([("信息", "读取中...")])
+        task = _ExifTask(request_id, self._active_path)
+        self._exif_tasks[request_id] = task
+        task.signals.finished.connect(self._on_async_finished)
+        QThreadPool.globalInstance().start(task)
+
+    def _on_async_finished(
+        self, request_id: int, path: str, rows: list[tuple[str, str]]
+    ):
+        self._exif_tasks.pop(request_id, None)
+        if request_id != self._request_id or path != self._active_path:
+            return
+        self._render_rows(rows)
+
+    def clear_exif(self):
+        self._request_id += 1
+        self._active_path = None
+        self._tree.clear()
 
     def _show_empty(self, msg: str):
         item = QTreeWidgetItem(["信息", msg])

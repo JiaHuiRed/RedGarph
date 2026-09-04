@@ -30,41 +30,76 @@ def apply_theme(name: str):
 # ── QSS 样式表 ──
 
 _NIGHT_QSS = """
-QMainWindow, QWidget { background-color: #1e1e1e; color: #e0e0e0; }
+QMainWindow, QWidget { background-color: #181a1d; color: #e6eaf0; }
+#ImageArea, #imagePanel { background-color: #111316; }
+#imageViewport { background-color: #111316; }
 
 /* ── 标题栏 ── */
-#titleBar { background-color: #2d2d2d; border-bottom: 1px solid #3c3c3c; }
-#titleLabel { color: #cccccc; font-size: 13px; }
-#verLabel { color: #666666; font-size: 11px; }
+#titleBar { background-color: #202226; border-bottom: 1px solid #353940; }
+#titleLabel { color: #eef2f7; font-size: 13px; font-weight: 500; }
+#verLabel { color: #8d96a3; font-size: 11px; }
+#MenuButton {
+    color: #b9c1cc; background: transparent; border: 1px solid transparent;
+    border-radius: 7px; font-size: 17px; padding: 0;
+}
+#MenuButton:hover { color: #ffffff; background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.12); }
+#MenuButton:pressed { background: rgba(255,255,255,0.16); }
 
 /* ── 信息栏 ── */
 #infoBar {
-    background-color: rgba(30, 30, 30, 180); color: #e0e0e0;
-    border-radius: 6px; padding: 6px 12px; font-size: 13px;
+    background-color: rgba(30, 33, 38, 228); color: #e8edf4;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 9px;
+    padding: 7px 14px; font-size: 13px;
 }
+#infoBar QLabel { color: #e8edf4; }
 
 /* ── 缩放指示器 ── */
 #zoomLabel {
-    background-color: rgba(45, 45, 45, 180); color: #cccccc;
-    border-radius: 6px; font-size: 12px;
+    background-color: rgba(30, 33, 38, 235); color: #e8edf4;
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+    font-size: 12px; font-weight: 500;
+}
+#bottomToolbar {
+    background-color: rgba(30, 33, 38, 235);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
 }
 
 /* ── EXIF 面板 ── */
-#exifPanel { background-color: #252525; border: none; }
-#exifTitle { background-color: #2d2d2d; color: #cccccc; font-size: 13px; font-weight: bold; border-bottom: 1px solid #3c3c3c; }
-#exifTree { background-color: #252525; color: #e0e0e0; border: none; }
-#exifTree::item { padding: 3px 6px; border-bottom: 1px solid #2d2d2d; }
-#exifTree::item:selected { background-color: rgba(74, 158, 255, 0.15); color: #4a9eff; }
-#exifTree QHeaderView::section { background-color: #2d2d2d; color: #aaaaaa; border-bottom: 1px solid #3c3c3c; padding: 4px 6px; font-size: 12px; }
+#exifPanel { background-color: #1b1e22; border-left: 1px solid #343942; }
+#exifTitle {
+    background-color: transparent; color: #f0f3f7; font-size: 15px; font-weight: 600;
+    border-left: 3px solid #5b9dff; border-bottom: 1px solid #30353d;
+    padding: 0 0 0 9px;
+}
+#exifTree {
+    background-color: #20242a; alternate-background-color: #232830;
+    color: #e8edf4; border: 1px solid #343b45; border-radius: 12px;
+    padding: 4px; outline: none;
+}
+#exifTree::item {
+    background-color: #20242a; color: #e8edf4; padding: 8px 10px;
+    border: none; border-bottom: 1px solid #2d333b;
+}
+#exifTree::item:alternate { background-color: #232830; color: #e8edf4; }
+#exifTree::item:hover { background-color: #2b333d; }
+#exifTree::item:selected { background-color: #243f61; color: #ffffff; }
+#exifTree QHeaderView { background-color: #20242a; border: none; }
+#exifTree QHeaderView::section {
+    background-color: #252a32; color: #9da7b6; border: none;
+    border-bottom: 1px solid #363d47; padding: 8px 10px;
+    font-size: 11px; font-weight: 600;
+}
+
+#MainSplitter::handle { background-color: #303640; }
 
 /* ── 滚动条 ── */
 QScrollBar:horizontal { background: #2d2d2d; height: 8px; border: none; }
 QScrollBar::handle:horizontal { background: #555; border-radius: 4px; min-width: 30px; }
 QScrollBar::handle:horizontal:hover { background: #777; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-QScrollBar:vertical { background: #2d2d2d; width: 8px; border: none; }
-QScrollBar::handle:vertical { background: #555; border-radius: 4px; min-height: 30px; }
-QScrollBar::handle:vertical:hover { background: #777; }
+QScrollBar:vertical { background: transparent; width: 6px; border: none; margin: 4px 0; }
+QScrollBar::handle:vertical { background: #4b5563; border-radius: 3px; min-height: 30px; }
+QScrollBar::handle:vertical:hover { background: #657184; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 
 /* ── 菜单 ── */
@@ -84,35 +119,59 @@ QMessageBox QPushButton:hover { background-color: #4a9eff; border-color: #4a9eff
 
 _DAY_QSS = """
 QMainWindow, QWidget { background-color: #f5f5f5; color: #333; }
+#ImageArea, #imagePanel { background-color: #edf0f4; }
+#imageViewport { background-color: #edf0f4; }
 
 #titleBar { background-color: #e8e8e8; border-bottom: 1px solid #d0d0d0; }
 #titleLabel { color: #555; font-size: 13px; }
 #verLabel { color: #aaaaaa; font-size: 11px; }
+#MenuButton { color: #6d737b; background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 17px; padding: 0; }
+#MenuButton:hover { color: #333; background: rgba(0,0,0,0.07); border-color: rgba(0,0,0,0.10); }
+#MenuButton:pressed { background: rgba(0,0,0,0.12); }
 
 #infoBar {
     background-color: rgba(245, 245, 245, 200); color: #333;
-    border-radius: 6px; padding: 6px 12px; font-size: 13px;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 9px; padding: 7px 14px; font-size: 13px;
 }
+#infoBar QLabel { color: #333; }
 
 #zoomLabel {
     background-color: rgba(220, 220, 220, 200); color: #555;
-    border-radius: 6px; font-size: 12px;
+    border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; font-size: 12px;
 }
 
-#exifPanel { background-color: #ececec; border: none; }
-#exifTitle { background-color: #e8e8e8; color: #555; font-size: 13px; font-weight: bold; border-bottom: 1px solid #d0d0d0; }
-#exifTree { background-color: #ececec; color: #333; border: none; }
-#exifTree::item { padding: 3px 6px; border-bottom: 1px solid #e0e0e0; }
-#exifTree::item:selected { background-color: rgba(0, 120, 212, 0.1); color: #0078d4; }
-#exifTree QHeaderView::section { background-color: #e8e8e8; color: #777; border-bottom: 1px solid #d0d0d0; padding: 4px 6px; font-size: 12px; }
+#exifPanel { background-color: #f6f8fb; border-left: 1px solid #e6eaf0; }
+#exifTitle {
+    background-color: transparent; color: #1f2937; font-size: 15px; font-weight: 600;
+    border-left: 3px solid #3b82f6; border-bottom: 1px solid #e6eaf0;
+    padding: 0 0 0 9px;
+}
+#exifTree {
+    background-color: #ffffff; alternate-background-color: #fbfcfe; color: #263241;
+    border: 1px solid #e1e6ee; border-radius: 12px; padding: 4px; outline: none;
+}
+#exifTree::item {
+    background-color: #ffffff; color: #263241; padding: 8px 10px;
+    border: none; border-bottom: 1px solid #f0f2f5;
+}
+#exifTree::item:alternate { background-color: #fbfcfe; color: #263241; }
+#exifTree::item:hover { background-color: #f1f6fd; }
+#exifTree::item:selected { background-color: #e8f1ff; color: #165dcc; }
+#exifTree QHeaderView { background-color: #ffffff; border: none; }
+#exifTree QHeaderView::section {
+    background-color: #f8fafc; color: #7a8697; border: none;
+    border-bottom: 1px solid #e5eaf0; padding: 8px 10px;
+    font-size: 11px; font-weight: 600;
+}
+#MainSplitter::handle { background-color: #e6eaf0; }
 
 QScrollBar:horizontal { background: #e0e0e0; height: 8px; border: none; }
 QScrollBar::handle:horizontal { background: #aaa; border-radius: 4px; min-width: 30px; }
 QScrollBar::handle:horizontal:hover { background: #888; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-QScrollBar:vertical { background: #e0e0e0; width: 8px; border: none; }
-QScrollBar::handle:vertical { background: #aaa; border-radius: 4px; min-height: 30px; }
-QScrollBar::handle:vertical:hover { background: #888; }
+QScrollBar:vertical { background: transparent; width: 6px; border: none; margin: 4px 0; }
+QScrollBar::handle:vertical { background: #cbd3df; border-radius: 3px; min-height: 30px; }
+QScrollBar::handle:vertical:hover { background: #aeb9c8; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 
 QMenuBar { background-color: #e8e8e8; color: #555; border-bottom: 1px solid #d0d0d0; }
@@ -130,34 +189,59 @@ QMessageBox QPushButton:hover { background-color: #0078d4; color: #fff; border-c
 
 _DEEPBLUE_QSS = """
 QMainWindow, QWidget { background-color: #0d1b2a; color: #c8d6e5; }
+#ImageArea, #imagePanel { background-color: #091521; }
+#imageViewport { background-color: #091521; }
 
 #titleBar { background-color: #112240; border-bottom: 1px solid #1a3a5c; }
 #titleLabel { color: #8892b0; font-size: 13px; }
 #verLabel { color: #3a5078; font-size: 11px; }
+#MenuButton { color: #a8b7cf; background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 17px; padding: 0; }
+#MenuButton:hover { color: #e6f1ff; background: rgba(93,173,226,0.12); border-color: rgba(93,173,226,0.24); }
+#MenuButton:pressed { background: rgba(93,173,226,0.18); }
 
 #infoBar {
     background-color: rgba(13, 27, 42, 200); color: #c8d6e5;
-    border-radius: 6px; padding: 6px 12px; font-size: 13px;
+    border: 1px solid rgba(93,173,226,0.22); border-radius: 9px; padding: 7px 14px; font-size: 13px;
 }
+#infoBar QLabel { color: #c8d6e5; }
 
 #zoomLabel {
     background-color: rgba(17, 34, 64, 200); color: #8892b0;
-    border-radius: 6px; font-size: 12px;
+    border: 1px solid rgba(93,173,226,0.22); border-radius: 8px; font-size: 12px;
 }
 
-#exifPanel { background-color: #0a1628; border: none; }
-#exifTitle { background-color: #112240; color: #8892b0; font-size: 13px; font-weight: bold; border-bottom: 1px solid #1a3a5c; }
-#exifTree { background-color: #0a1628; color: #c8d6e5; border: none; }
-#exifTree::item { padding: 3px 6px; border-bottom: 1px solid #112240; }
-#exifTree::item:selected { background-color: rgba(93, 173, 226, 0.12); color: #5dade2; }
-#exifTree QHeaderView::section { background-color: #112240; color: #8892b0; border-bottom: 1px solid #1a3a5c; padding: 4px 6px; font-size: 12px; }
+#exifPanel { background-color: #0a1628; border-left: 1px solid #1a3552; }
+#exifTitle {
+    background-color: transparent; color: #e6f1ff; font-size: 15px; font-weight: 600;
+    border-left: 3px solid #5dade2; border-bottom: 1px solid #183552;
+    padding: 0 0 0 9px;
+}
+#exifTree {
+    background-color: #0d1d31; alternate-background-color: #10233a;
+    color: #c8d6e5; border: 1px solid #1a3a5c; border-radius: 12px;
+    padding: 4px; outline: none;
+}
+#exifTree::item {
+    background-color: #0d1d31; color: #c8d6e5; padding: 8px 10px;
+    border: none; border-bottom: 1px solid #17304a;
+}
+#exifTree::item:alternate { background-color: #10233a; color: #c8d6e5; }
+#exifTree::item:hover { background-color: #153657; }
+#exifTree::item:selected { background-color: #16395c; color: #8fd3ff; }
+#exifTree QHeaderView { background-color: #0d1d31; border: none; }
+#exifTree QHeaderView::section {
+    background-color: #10213a; color: #91a4be; border: none;
+    border-bottom: 1px solid #1a3a5c; padding: 8px 10px;
+    font-size: 11px; font-weight: 600;
+}
+#MainSplitter::handle { background-color: #1a3a5c; }
 
 QScrollBar:horizontal { background: #112240; height: 8px; border: none; }
 QScrollBar::handle:horizontal { background: #2c5282; border-radius: 4px; min-width: 30px; }
 QScrollBar::handle:horizontal:hover { background: #3a7bd5; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-QScrollBar:vertical { background: #112240; width: 8px; border: none; }
-QScrollBar::handle:vertical { background: #2c5282; border-radius: 4px; min-height: 30px; }
+QScrollBar:vertical { background: transparent; width: 6px; border: none; margin: 4px 0; }
+QScrollBar::handle:vertical { background: #28537a; border-radius: 3px; min-height: 30px; }
 QScrollBar::handle:vertical:hover { background: #3a7bd5; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 

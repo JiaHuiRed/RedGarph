@@ -21,6 +21,23 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+python -c "import PyQt6, PIL" >nul 2>&1
+if errorlevel 1 (
+    echo Installing application dependencies...
+    python -m pip install -r "%~dp0requirements.txt"
+    if errorlevel 1 (
+        echo Dependency installation failed.
+        pause
+        exit /b 1
+    )
+    python -c "import PyQt6, PIL" >nul 2>&1
+    if errorlevel 1 (
+        echo Required application dependencies are unavailable.
+        pause
+        exit /b 1
+    )
+)
+
 python -c "import PyInstaller" >nul 2>&1
 if %errorlevel% neq 0 (
     python -m pip install pyinstaller

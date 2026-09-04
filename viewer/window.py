@@ -147,7 +147,10 @@ class MainWindow(QMainWindow):
 
         self._theme = theme
 
-        self._current_path: Path | None = None
+        self._current_path: Path | None = None
+        self._exif_generation = 0
+        self._shortcut_actions: list[QAction] = []
+        self._pending_folder_dialog: Path | None = None
 
         # ── 无框窗口 ──
 
@@ -187,7 +190,48 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
 
-        self._connect_signals()
+        self._connect_signals()
+        self._install_navigation_shortcuts()
+
+    def _register_shortcut(self, action: QAction, sequence: str):
+        """让菜单动作在应用内始终生效，即使焦点位于图片子控件。"""
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self.addAction(action)
+
+    def _add_shortcut(self, sequence: str, callback):
+        action = QAction(self)
+        action.setShortcut(sequence)
+        action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        action.triggered.connect(callback)
+        self.addAction(action)
+        self._shortcut_actions.append(action)
+
+    def _install_navigation_shortcuts(self):
+        self._add_shortcut("Left", self._previous_image)
+        self._add_shortcut("Right", self._next_image)
+        self._add_shortcut("R", self.image_panel.rotate_right)
+        self._add_shortcut("Shift+R", self.image_panel.rotate_left)
+        self._add_shortcut("F", self._toggle_fullscreen)
+        self._add_shortcut("F11", self._toggle_fullscreen)
+        self._add_shortcut("Ctrl+0", self.image_panel.fit_to_window)
+        self._add_shortcut("Ctrl+1", self.image_panel.actual_size)
+
+    def _previous_image(self):
+        self._stop_slideshow()
+        self.file_list.prev_image()
+
+    def _next_image(self):
+        self._stop_slideshow()
+        self.file_list.next_image()
+
+    def _toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+            self.titlebar.setVisible(True)
+        else:
+            self.showFullScreen()
+            self.titlebar.setVisible(False)
 
 
 
@@ -222,40 +266,46 @@ class MainWindow(QMainWindow):
         # 文件
 
         act_open = QAction("打开文件夹...", self)
-        act_open.triggered.connect(self._open_folder)
-        menu.addAction(act_open)
+        act_open.triggered.connect(self._open_folder)
+        self._register_shortcut(act_open, "Ctrl+O")
+        menu.addAction(act_open)
 
         menu.addSeparator()
 
         # 保存
 
         act_save = QAction("保存", self)
-        act_save.triggered.connect(self._save_image)
-        menu.addAction(act_save)
+        act_save.triggered.connect(self._save_image)
+        self._register_shortcut(act_save, "Ctrl+S")
+        menu.addAction(act_save)
 
         act_save_as = QAction("另存为...", self)
-        act_save_as.triggered.connect(self._save_image_as)
-        menu.addAction(act_save_as)
+        act_save_as.triggered.connect(self._save_image_as)
+        self._register_shortcut(act_save_as, "Ctrl+Shift+S")
+        menu.addAction(act_save_as)
 
         menu.addSeparator()
 
         # 复制
 
         act_copy = QAction("复制图片", self)
-        act_copy.triggered.connect(self._copy_to_clipboard)
-        menu.addAction(act_copy)
+        act_copy.triggered.connect(self._copy_to_clipboard)
+        self._register_shortcut(act_copy, "Ctrl+C")
+        menu.addAction(act_copy)
 
         menu.addSeparator()
 
         # 文件操作
 
         act_show = QAction("在资源管理器中显示", self)
-        act_show.triggered.connect(self._show_in_explorer)
-        menu.addAction(act_show)
+        act_show.triggered.connect(self._show_in_explorer)
+        self._register_shortcut(act_show, "Ctrl+Shift+E")
+        menu.addAction(act_show)
 
         act_delete = QAction("删除到回收站", self)
-        act_delete.triggered.connect(self._delete_current)
-        menu.addAction(act_delete)
+        act_delete.triggered.connect(self._delete_current)
+        self._register_shortcut(act_delete, "Delete")
+        menu.addAction(act_delete)
 
         menu.addSeparator()
 
@@ -263,8 +313,9 @@ class MainWindow(QMainWindow):
 
         self._act_slideshow = QAction("幻灯片播放", self)
         self._act_slideshow.setCheckable(True)
-        self._act_slideshow.triggered.connect(self._toggle_slideshow)
-        menu.addAction(self._act_slideshow)
+        self._act_slideshow.triggered.connect(self._toggle_slideshow)
+        self._register_shortcut(self._act_slideshow, "Space")
+        menu.addAction(self._act_slideshow)
 
         act_slideshow_interval = QAction("间隔调节...", self)
         act_slideshow_interval.triggered.connect(self._adjust_slideshow_interval)
@@ -275,16 +326,19 @@ class MainWindow(QMainWindow):
         # EXIF 信息面板
 
         self._act_exif = QAction("EXIF 信息", self)
-        self._act_exif.setCheckable(True)
-        self._act_exif.triggered.connect(self._toggle_exif)
-        menu.addAction(self._act_exif)
+        self._act_exif.setCheckable(True)
+        self._act_exif.setChecked(True)
+        self._act_exif.triggered.connect(self._toggle_exif)
+        self._register_shortcut(self._act_exif, "Ctrl+E")
+        menu.addAction(self._act_exif)
 
         # 显示信息
 
         self._act_info = QAction("显示信息", self)
         self._act_info.setCheckable(True)
-        self._act_info.triggered.connect(self._toggle_info)
-        menu.addAction(self._act_info)
+        self._act_info.triggered.connect(self._toggle_info)
+        self._register_shortcut(self._act_info, "I")
+        menu.addAction(self._act_info)
 
         menu.addSeparator()
 
@@ -292,8 +346,9 @@ class MainWindow(QMainWindow):
 
         self._act_crop = QAction("裁剪模式", self)
         self._act_crop.setCheckable(True)
-        self._act_crop.triggered.connect(self._toggle_crop)
-        menu.addAction(self._act_crop)
+        self._act_crop.triggered.connect(self._toggle_crop)
+        self._register_shortcut(self._act_crop, "Ctrl+Shift+C")
+        menu.addAction(self._act_crop)
 
         menu.addSeparator()
 
@@ -328,7 +383,8 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
 
         act_quit = QAction("退出", self)
-        act_quit.triggered.connect(self.close)
+        act_quit.triggered.connect(self.close)
+        self._register_shortcut(act_quit, "Ctrl+Q")
         menu.addAction(act_quit)
 
         menu_btn.setMenu(menu)
@@ -417,11 +473,10 @@ class MainWindow(QMainWindow):
 
         """连接组件信号"""
 
-        self.file_list.currentChanged.connect(self._on_index_changed)
+        self.file_list.currentChanged.connect(self._on_index_changed)
+        self.file_list.directoryLoadFinished.connect(self._on_directory_load_finished)
 
-        self.file_list.filesChanged.connect(self._update_ui)
-
-        self.slideshow.nextRequested.connect(self._slideshow_next)
+        self.slideshow.nextRequested.connect(self._slideshow_next)
 
         self.slideshow.intervalChanged.connect(self._on_slideshow_interval_changed)
 
@@ -437,9 +492,10 @@ class MainWindow(QMainWindow):
 
         self._slideshow_interval = sec
 
-        self.info_bar.show_info(
-            self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
-        )
+        self.info_bar.show_info(
+            self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
+            dimensions=self.image_panel.image_size,
+        )
 
     # ── 文件操作 ──
 
@@ -455,43 +511,31 @@ class MainWindow(QMainWindow):
 
             return
 
-        if self.file_list.load_directory(d):
-
-            self._update_ui()
-
-        else:
-
-            QMessageBox.information(self, "提示", "文件夹中没有找到图片")
+        self._pending_folder_dialog = Path(d)
+        self.file_list.load_directory_async(d)
+
+    def _on_directory_load_finished(self, path: Path, has_images: bool):
+        if self._pending_folder_dialog != path:
+            return
+        self._pending_folder_dialog = None
+        if not has_images:
+            QMessageBox.information(self, "提示", "文件夹中没有找到图片")
 
     def load_path(self, path: str | Path):
 
         """从外部路径加载（拖拽或命令行）"""
 
-        p = Path(path)
+        p = Path(path)
+        self._pending_folder_dialog = None
 
         if p.is_dir():
 
-            self.file_list.load_directory(p)
-
-            self._update_ui()
+            self.file_list.load_directory_async(p)
 
         elif p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS:
 
-            self.file_list.load_directory(p.parent)
+            self.file_list.load_directory_async(p.parent, selected=p)
 
-            idx = next(
-
-                (i for i, f in enumerate(self.file_list.files) if f == p),
-
-                -1,
-
-            )
-
-            if idx >= 0:
-
-                self.file_list.go_to(idx)
-
-            self._update_ui()
 
     # ── UI 更新 ──
 
@@ -507,39 +551,47 @@ class MainWindow(QMainWindow):
 
             self._load_current()
 
-        else:
-
-            self.image_panel.load_image("")
-
-            self._current_path = None
-
-            self.titlebar.set_title("RedGarph")
+        else:
+
+            self.image_panel.load_image("")
+
+            self._current_path = None
+
+            self.titlebar.set_title("RedGarph")
+
+            self.info_bar.show_info(None)
+            self.exif_panel.clear_exif()
+            self._exif_generation += 1
 
     def _load_current(self):
 
         """加载当前索引的图片"""
 
         path = self.file_list.current
-
+
         if not path:
 
             return
 
         self._current_path = path
 
-        # 先让窗口刷新一帧，再阻塞式解码图片，避免界面卡死感
-        QApplication.processEvents()
-
-        self.image_panel.load_image(str(path))
+        self._exif_generation += 1
+        if not self.image_panel.load_image(str(path)):
+            self._current_path = None
+            self.titlebar.set_title(f"RedGarph — {path.name}")
+            self.info_bar.show_info(None, extra="无法加载图片")
+            self.exif_panel.clear_exif()
+            return
 
         self.titlebar.set_title(f"RedGarph — {path.name}")
 
         # 更新信息栏
 
         self.info_bar.show_info(
-            path,
-            self.image_panel.source,
-            extra=f"幻灯片间隔：{self._slideshow_interval}s",
+            path,
+            self.image_panel.source,
+            extra=f"幻灯片间隔：{self._slideshow_interval}s",
+            dimensions=self.image_panel.image_size,
         )
 
         self.info_bar.show_page(self.file_list.index, self.file_list.count)
@@ -548,17 +600,30 @@ class MainWindow(QMainWindow):
 
         # 更新 EXIF 面板（如果可见）
 
-        if self.exif_panel.isVisible():
-
-            # 延迟到事件循环空闲再读 EXIF，不阻塞首屏
-            QTimer.singleShot(0, lambda p=path: self.exif_panel.set_image(str(p)))
-
-    def _on_index_changed(self, index: int):
-
-        if index >= 0:
-
-            self._load_current()
-
+        if not self.exif_panel.isHidden():
+            self._queue_exif(path)
+
+    def _queue_exif(self, path: Path):
+        """延迟读取 EXIF，并丢弃已经过期的请求。"""
+        self._exif_generation += 1
+        generation = self._exif_generation
+        QTimer.singleShot(
+            0,
+            lambda p=path, g=generation: self._load_exif_if_current(p, g),
+        )
+
+    def _load_exif_if_current(self, path: Path, generation: int):
+        if (
+            generation != self._exif_generation
+            or self.exif_panel.isHidden()
+            or self._current_path != path
+        ):
+            return
+        self.exif_panel.set_image_async(str(path))
+
+    def _on_index_changed(self, index: int):
+        self._update_ui()
+
     # ── 幻灯片 ──
 
     def _toggle_slideshow(self):
@@ -593,17 +658,19 @@ class MainWindow(QMainWindow):
 
     # ── EXIF 面板 ──
 
-    def _toggle_exif(self):
-
-        self.exif_panel.toggle()
-
-        self._act_exif.setChecked(self.exif_panel.isVisible())
-
-        # 切换时刷新当前图片的 EXIF
-
-        if self.exif_panel.isVisible() and self._current_path:
-
-            self.exif_panel.set_image(str(self._current_path))
+    def _toggle_exif(self):
+
+        self.exif_panel.toggle()
+
+        is_enabled = not self.exif_panel.isHidden()
+        self._act_exif.setChecked(is_enabled)
+
+        # 切换时刷新当前图片的 EXIF
+
+        if is_enabled and self._current_path:
+            self._queue_exif(self._current_path)
+        else:
+            self._exif_generation += 1
 
     # ── 裁剪模式 ──
 
@@ -623,11 +690,11 @@ class MainWindow(QMainWindow):
 
     # ── 信息栏 ──
 
-    def _toggle_info(self):
-
-        self.info_bar.toggle()
-
-        self._act_info.setChecked(self.info_bar.isVisible())
+    def _toggle_info(self):
+
+        self.info_bar.toggle()
+
+        self._act_info.setChecked(not self.info_bar.isHidden())
 
     def _position_info_bar(self):
 
@@ -673,7 +740,7 @@ class MainWindow(QMainWindow):
 
         ".png": "PNG", ".bmp": "BMP",
 
-        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF",
+        ".webp": "WEBP", ".tif": "TIFF", ".tiff": "TIFF", ".ico": "ICO",
 
     }
 
@@ -681,9 +748,12 @@ class MainWindow(QMainWindow):
 
         """Ctrl+S — 覆盖保存（保留当前旋转/裁剪状态）"""
 
-        if not self._current_path:
-
-            return
+        if not self._current_path:
+
+            return
+
+        if not self.image_panel.is_dirty:
+            return
 
         pix = self.image_panel.full_res_pixmap()
 
@@ -691,11 +761,17 @@ class MainWindow(QMainWindow):
 
             return
 
-        fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
-
-        if not pix.save(str(self._current_path), fmt):
-
-            QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
+        fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
+        if not fmt:
+            QMessageBox.warning(self, "保存失败", "SVG 图片不支持直接覆盖保存，请使用另存为导出")
+            return
+
+        if not pix.save(str(self._current_path), fmt):
+
+            QMessageBox.warning(self, "保存失败", f"无法写入：{self._current_path.name}")
+        else:
+            self.image_panel.invalidate_cache(str(self._current_path))
+            self._load_current()
 
     def _save_image_as(self):
 
@@ -705,26 +781,38 @@ class MainWindow(QMainWindow):
 
             return
 
-        pix = self.image_panel.full_res_pixmap()
-
-        if pix.isNull():
-
-            return
-
-        path, _ = QFileDialog.getSaveFileName(
-            self, "另存为", str(self._current_path),
-            "图片 (*.png *.jpg *.bmp *.webp *.tiff);;所有文件 (*)",
+        path, _ = QFileDialog.getSaveFileName(
+            self, "另存为", str(self._current_path),
+            "图片 (*.png *.jpg *.bmp *.webp *.tiff *.ico);;所有文件 (*)",
         )
-
-        if not path:
-
-            return
-
-        fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
-
-        if not pix.save(path, fmt):
-
-            QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
+
+        if not path:
+
+            return
+
+        fmt = self._EXT_FMT.get(Path(path).suffix.lower(), "")
+        if not fmt:
+            QMessageBox.warning(self, "保存失败", "仅支持 PNG、JPEG、BMP、WEBP、TIFF 和 ICO 格式")
+            return
+
+        pix = self.image_panel.full_res_pixmap()
+
+        if pix.isNull():
+            return
+
+        same_path = False
+        try:
+            same_path = Path(path).resolve() == self._current_path.resolve()
+        except OSError:
+            pass
+
+        if not pix.save(path, fmt):
+
+            QMessageBox.warning(self, "保存失败", f"无法写入：{Path(path).name}")
+        else:
+            self.image_panel.invalidate_cache(path)
+            if same_path:
+                self._load_current()
 
     # ── 剪贴板 ──
 
@@ -769,7 +857,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "删除失败", f"无法移至回收站：{name}")
             return
 
-        self.file_list.remove_current()
+        self.image_panel.invalidate_cache(str(path))
+        self.file_list.remove_current()
 
     @staticmethod
 
@@ -791,7 +880,7 @@ class MainWindow(QMainWindow):
 
                 ("fFlags",  ctypes.c_ushort),
 
-                ("fAborted",ctypes.c_bool),
+                ("fAborted",ctypes.wintypes.BOOL),
 
                 ("hMapping",ctypes.c_void_p),
 

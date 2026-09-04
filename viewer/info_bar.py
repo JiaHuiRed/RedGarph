@@ -29,7 +29,13 @@ class InfoBar(QWidget):
             QSizePolicy.Policy.Minimum,
         )
 
-    def show_info(self, path: Path | None, pixmap: QPixmap | None = None, extra: str = ""):
+    def show_info(
+        self,
+        path: Path | None,
+        pixmap: QPixmap | None = None,
+        extra: str = "",
+        dimensions: tuple[int, int] | None = None,
+    ):
 
         if not path:
 
@@ -38,9 +44,16 @@ class InfoBar(QWidget):
             return
 
         name = path.name
-        size_str = _format_size(path.stat().st_size)
+        try:
+            size_str = _format_size(path.stat().st_size)
+        except OSError:
+            self._label.setText(f"{extra}  {name}  —  文件不可访问".strip())
+            return
 
-        if pixmap and not pixmap.isNull():
+        if dimensions:
+            dim = f"{dimensions[0]} × {dimensions[1]}"
+            base = f"{name}  —  {dim}  —  {size_str}"
+        elif pixmap and not pixmap.isNull():
 
             dim = f"{pixmap.width()} × {pixmap.height()}"
 

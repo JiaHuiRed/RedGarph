@@ -21,9 +21,14 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-where pyinstaller >nul 2>&1
+python -c "import PyInstaller" >nul 2>&1
 if %errorlevel% neq 0 (
-    pip install pyinstaller
+    python -m pip install pyinstaller
+    if errorlevel 1 (
+        echo PyInstaller installation failed.
+        pause
+        exit /b 1
+    )
 )
 
 for /f "delims=" %%v in ('python -c "import sys; sys.path.insert(0, '.'); from viewer.constants import APP_VERSION; print(APP_VERSION)"') do set APP_VERSION=%%v
@@ -40,7 +45,7 @@ if %errorlevel% neq 0 (
 )
 
 echo Building RedGarph V%APP_VERSION% (%MODE%)...
-pyinstaller --onedir %CONSOLE_FLAG% --name "%BUILD_NAME%" --icon resources\icon.ico --add-data "resources\icon.ico;resources" --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
+python -m PyInstaller --onedir %CONSOLE_FLAG% --name "%BUILD_NAME%" --icon resources\icon.ico --add-data "resources\icon.ico;resources" --clean --noconfirm --hidden-import=viewer --hidden-import=viewer.window --hidden-import=ctypes.wintypes main.py
 
 set BUILD_ERROR=%errorlevel%
 

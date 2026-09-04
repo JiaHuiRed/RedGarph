@@ -1,6 +1,8 @@
 #author Red
 #260620 Red&小宋 RedGarph V0.0.1 — 图片渲染与交互
 
+import os
+
 from PyQt6.QtCore import Qt, QRectF, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import (
     QPixmap, QPainter, QColor, QBrush, QTransform,
@@ -197,13 +199,19 @@ class ImagePanel(QGraphicsView):
 
         # ── 状态 ──
         self._source = QPixmap()   # 原始未旋转的图片
+        self._image_size: tuple[int, int] | None = None  # 磁盘图片的实际尺寸
         self._zoom: float | None = None   # None = 适应窗口模式
         self._rotation = 0          # 0/90/180/270
+        self._dirty = False         # 是否存在尚未保存的旋转/裁剪
         self._full_path: str | None = None  # 磁盘原图路径；裁剪/编辑后置 None
 
         # ── 图片缓存（LRU，避免翻页时重复解码） ──
-        self._cache: OrderedDict[str, QPixmap] = OrderedDict()
+        self._cache: OrderedDict[
+            str, tuple[QPixmap, tuple[int, int], tuple[int, int]]
+        ] = OrderedDict()
         self._cache_max = 20
+        self._cache_max_bytes = 256 * 1024 * 1024
+        self._cache_bytes = 0
 
         # ── 渲染设置 ──
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
@@ -330,25 +338,86 @@ class ImagePanel(QGraphicsView):
 
     # ── 图片加载 ──
 
+    @staticmethod
+    def _cache_key(path: str) -> str:
+        """统一路径，避免同一文件用相对/绝对路径产生两份缓存。"""
+        return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+
+    @staticmethod
+    def _file_signature(path: str) -> tuple[int, int] | None:
+        try:
+            stat = os.stat(path)
+        except OSError:
+            return None
+        return stat.st_mtime_ns, stat.st_size
+
+    @staticmethod
+    def _pixmap_cost(pix: QPixmap) -> int:
+        if pix.isNull():
+            return 0
+        return pix.width() * pix.height() * max(1, pix.depth() // 8)
+
+    def _remove_cached(self, key: str):
+        entry = self._cache.pop(key, None)
+        if entry:
+            self._cache_bytes -= self._pixmap_cost(entry[0])
+
+    def _cache_pixmap(
+        self,
+        key: str,
+        pix: QPixmap,
+        signature: tuple[int, int],
+        image_size: tuple[int, int],
+    ):
+        self._remove_cached(key)
+        self._cache[key] = (pix, signature, image_size)
+        self._cache_bytes += self._pixmap_cost(pix)
+        while self._cache and (
+            len(self._cache) > self._cache_max
+            or self._cache_bytes > self._cache_max_bytes
+        ):
+            _, entry = self._cache.popitem(last=False)
+            self._cache_bytes -= self._pixmap_cost(entry[0])
+
+    def invalidate_cache(self, path: str):
+        """使指定路径的缓存失效（保存、删除后调用）。"""
+        self._remove_cached(self._cache_key(path))
+
+    def _clear_image(self):
+        self._source = QPixmap()
+        self._image_size = None
+        self._rotation = 0
+        self._dirty = False
+        self._zoom = None
+        self._full_path = None
+        self._item.setPixmap(QPixmap())
+        self._scene.setSceneRect(QRectF())
+        self._zoom_label.setVisible(False)
+        self._bottom_toolbar.hide()
+
     def load_image(self, path: str) -> bool:
         """加载图片，适应窗口显示（大图缩小解码，翻页更快）"""
         if not path:
-            self._source = QPixmap()
-            self._rotation = 0
-            self._zoom = None
-            self._full_path = None
-            self._refresh()
+            self._clear_image()
             return True
 
+        key = self._cache_key(path)
+        signature = self._file_signature(path)
+
         # 缓存命中：直接使用内存中的 pixmap，跳过磁盘解码
-        if path in self._cache:
-            self._source = self._cache[path]
-            self._cache.move_to_end(path)
+        entry = self._cache.get(key)
+        if entry and signature is not None and entry[1] == signature:
+            self._source = entry[0]
+            self._image_size = entry[2]
+            self._cache.move_to_end(key)
             self._rotation = 0
+            self._dirty = False
             self._zoom = None
             self._full_path = path
             self._refresh()
             return True
+        if entry:
+            self._remove_cached(key)
 
         # 缩小解码：长边超过 _DISPLAY_MAX 时按比例缩小，避免全尺寸同步解码卡顿
         reader = QImageReader(path)
@@ -360,16 +429,23 @@ class ImagePanel(QGraphicsView):
             )
         img = reader.read()
         if img.isNull():
+            self._clear_image()
             return False
         pix = QPixmap.fromImage(img)
+        image_size = (
+            (size.width(), size.height())
+            if size.isValid()
+            else (pix.width(), pix.height())
+        )
 
         # 写入 LRU 缓存
-        self._cache[path] = pix
-        if len(self._cache) > self._cache_max:
-            self._cache.popitem(last=False)
+        if signature is not None:
+            self._cache_pixmap(key, pix, signature, image_size)
 
         self._source = pix
+        self._image_size = image_size
         self._rotation = 0
+        self._dirty = False
         self._zoom = None
         self._full_path = path
         self._refresh()
@@ -378,6 +454,15 @@ class ImagePanel(QGraphicsView):
     @property
     def has_image(self) -> bool:
         return not self._source.isNull()
+
+    @property
+    def image_size(self) -> tuple[int, int] | None:
+        """返回磁盘图片的实际尺寸，而不是显示用缩略图尺寸。"""
+        return self._image_size
+
+    @property
+    def is_dirty(self) -> bool:
+        return self._dirty
 
     # ── 缩放 ──
 
@@ -392,6 +477,15 @@ class ImagePanel(QGraphicsView):
         """100% 原始尺寸"""
         if self._source.isNull():
             return
+        if self._full_path and self._image_size:
+            source_pixels = self._source.width() * self._source.height()
+            image_pixels = self._image_size[0] * self._image_size[1]
+            if source_pixels < image_pixels:
+                reader = QImageReader(self._full_path)
+                reader.setAutoTransform(True)
+                img = reader.read()
+                if not img.isNull():
+                    self._source = QPixmap.fromImage(img)
         self._zoom = 1.0
         self._refresh()
 
@@ -419,6 +513,7 @@ class ImagePanel(QGraphicsView):
         """顺时针旋转 90°"""
         if self._source.isNull():
             return
+        self._dirty = True
         self._rotation = (self._rotation + 90) % 360
         self._refresh()
 
@@ -426,6 +521,7 @@ class ImagePanel(QGraphicsView):
         """逆时针旋转 90°"""
         if self._source.isNull():
             return
+        self._dirty = True
         self._rotation = (self._rotation - 90) % 360
         self._refresh()
 
@@ -698,6 +794,8 @@ class ImagePanel(QGraphicsView):
                             t2, Qt.TransformationMode.SmoothTransformation
                         )
                     self._source = cropped
+                    self._image_size = (cropped.width(), cropped.height())
+                    self._dirty = True
                     self._rotation = 0
                     self._full_path = None
                     self._zoom = None
@@ -720,6 +818,8 @@ class ImagePanel(QGraphicsView):
         else:
             self._source = cropped
 
+        self._image_size = (self._source.width(), self._source.height())
+        self._dirty = True
         self._full_path = None
         self._zoom = None
         self._refresh()

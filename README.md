@@ -3,7 +3,7 @@
 > **macOS 风格本地图片查看器。** 缩放/旋转/裁剪/EXIF 信息面板。
 > _A macOS-style local image viewer with zoom, rotate, crop, and EXIF info panel._
 
-[![版本](https://badgen.net/badge/版本/0.1.6/blue)](CHANGELOG.md)
+[![版本](https://badgen.net/badge/版本/0.1.7/blue)](CHANGELOG.md)
 [![平台](https://badgen.net/badge/平台/Windows/lightgrey)]()
 [![Tech](https://badgen.net/badge/Tech/PyQt6/orange)]()
 
@@ -31,7 +31,7 @@
 
 ```bash
 cd RedGarph
-pip install PyQt6
+pip install -r requirements.txt
 python main.py
 # 或
 python main.py "C:\图片\photo.jpg"

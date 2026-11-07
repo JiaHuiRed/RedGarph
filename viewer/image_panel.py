@@ -21,6 +21,9 @@ from .constants import ZOOM_FACTOR, ZOOM_MAX, ZOOM_MIN
 # 显示用解码长边上限：超过则缩小解码，保存/裁剪时再按全分辨率处理
 _DISPLAY_MAX = 3840
 
+# 动图文件超过该大小时逐帧解码（CacheNone），避免全帧缓存占用过多内存
+_MOVIE_CACHE_MAX_BYTES = 50 * 1024 * 1024
+
 
 def _decode_display_image(path: str):
     """在线程中解码显示图像，只返回线程安全的 QImage。
@@ -564,7 +567,11 @@ class ImagePanel(QGraphicsView):
         return True
 
     def load_image_async(self, path: str):
-        """异步加载显示图像，过期解码结果会被丢弃。"""
+        """异步加载显示图像，过期解码结果会被丢弃。
+
+        返回 True 表示同步完成（空路径或缓存命中）；返回 None 表示已
+        提交异步任务，结果经 imageLoadFinished 信号返回。
+        """
         if self._crop_mode:
             self.cancel_crop()
         self._decode_generation += 1
@@ -627,13 +634,30 @@ class ImagePanel(QGraphicsView):
     def is_dirty(self) -> bool:
         return self._dirty
 
+    @property
+    def is_animated(self) -> bool:
+        """当前文件是否正在播放多帧动画。"""
+        return self._movie is not None
+
+    @property
+    def frame_count(self) -> int:
+        """动图总帧数；非动图返回 0。"""
+        return self._movie.frameCount() if self._movie else 0
+
     # ── 动图播放 ──
 
     def _start_movie(self, path: str):
         """对多帧图片（GIF / 动图 WEBP）启动逐帧播放。"""
         self._stop_movie()
         movie = QMovie(path, parent=self)
-        movie.setCacheMode(QMovie.CacheMode.CacheAll)
+        try:
+            oversized = os.path.getsize(path) > _MOVIE_CACHE_MAX_BYTES
+        except OSError:
+            oversized = False
+        movie.setCacheMode(
+            QMovie.CacheMode.CacheNone if oversized
+            else QMovie.CacheMode.CacheAll
+        )
         movie.frameChanged.connect(self._on_movie_frame)
         self._movie = movie
         movie.start()
@@ -851,7 +875,9 @@ class ImagePanel(QGraphicsView):
             return
 
         if self._zoom is None:
-            self._zoom = 1.0
+            # 适应窗口模式下从当前实际显示比例继续缩放，避免跳变
+            base = self.transform().m11()
+            self._zoom = base if base > 0 else 1.0
 
         factor = ZOOM_FACTOR ** (event.angleDelta().y() / 120)
         new_zoom = self._zoom * factor

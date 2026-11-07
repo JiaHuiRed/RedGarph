@@ -75,9 +75,3 @@ class InfoBar(QWidget):
 
     def toggle(self):
         self.setVisible(not self.isVisible())
-
-    def hide(self):
-        self.setVisible(False)
-
-    def show(self):
-        self.setVisible(True)

@@ -495,12 +495,19 @@ class MainWindow(QMainWindow):
         self.image_panel.saveRequested.connect(self._save_image)
         self.image_panel.imageLoadFinished.connect(self._on_image_load_finished)
 
+    def _info_extra(self) -> str:
+        """信息栏前缀：动图标识 + 幻灯片间隔"""
+        extra = f"幻灯片间隔：{self._slideshow_interval}s"
+        if self.image_panel.is_animated:
+            extra = f"动图 · {self.image_panel.frame_count} 帧  {extra}"
+        return extra
+
     def _on_slideshow_interval_changed(self, sec: int):
 
         self._slideshow_interval = sec
 
         self.info_bar.show_info(
-            self._current_path, self.image_panel.source, extra=f"幻灯片间隔：{sec}s",
+            self._current_path, self.image_panel.source, extra=self._info_extra(),
             dimensions=self.image_panel.image_size,
         )
 
@@ -622,7 +629,7 @@ class MainWindow(QMainWindow):
         self.info_bar.show_info(
             path,
             self.image_panel.source,
-            extra=f"幻灯片间隔：{self._slideshow_interval}s",
+            extra=self._info_extra(),
             dimensions=self.image_panel.image_size,
         )
         self.info_bar.show_page(self.file_list.index, self.file_list.count)

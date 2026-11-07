@@ -7,7 +7,7 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtCore import Qt, qInstallMessageHandler, QTimer
+from PyQt6.QtCore import Qt, qInstallMessageHandler, QTimer, QtMsgType
 from PyQt6.QtWidgets import QApplication
 
 from viewer.window import MainWindow
@@ -21,6 +21,9 @@ else:
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "crash.log"
 
+# 日志大小上限：超过后轮转为 crash.log.1，避免无限增长
+_LOG_MAX_BYTES = 1 * 1024 * 1024
+
 
 def _resource_path(relative: str) -> Path:
     """兼容源码运行和 PyInstaller onefile 的资源路径"""
@@ -32,14 +35,27 @@ def _resource_path(relative: str) -> Path:
 
 
 def _log(msg: str):
-    """写入崩溃日志"""
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{ts}] {msg}\n")
+    """写入崩溃日志；超过上限时轮转保留一份旧日志"""
+    try:
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > _LOG_MAX_BYTES:
+            rotated = LOG_FILE.with_name(LOG_FILE.name + ".1")
+            rotated.unlink(missing_ok=True)
+            LOG_FILE.replace(rotated)
+    except OSError:
+        pass
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except OSError:
+        # 磁盘不可写时静默放弃，不能让日志拖垮应用
+        pass
 
 
 def _qt_handler(msg_type, context, message):
-    """捕获 Qt 内部错误/警告"""
+    """捕获 Qt 内部错误/警告；debug 级噪音不落盘"""
+    if msg_type == QtMsgType.QtDebugMsg:
+        return
     _log(f"Qt: {message}")
 
 

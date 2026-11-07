@@ -1,7 +1,7 @@
 # 🖼 RedGarph
 
-> **macOS 风格本地图片查看器。** 缩放/旋转/裁剪/EXIF 信息面板。
-> _A macOS-style local image viewer with zoom, rotate, crop, and EXIF info panel._
+> **macOS 风格本地图片查看器。** 缩放/旋转/裁剪/GIF 动图播放/EXIF 信息面板。
+> _A macOS-style local image viewer with zoom, rotate, crop, GIF playback, and EXIF info panel._
 
 [![版本](https://badgen.net/badge/版本/0.2.0/blue)](CHANGELOG.md)
 [![平台](https://badgen.net/badge/平台/Windows/lightgrey)]()

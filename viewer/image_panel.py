@@ -8,7 +8,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QBrush, QTransform,
-    QPen, QFont, QFontMetrics, QAction, QImageReader,
+    QPen, QFont, QFontMetrics, QAction, QImageReader, QMovie,
 )
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
@@ -23,7 +23,11 @@ _DISPLAY_MAX = 3840
 
 
 def _decode_display_image(path: str):
-    """在线程中解码显示图像，只返回线程安全的 QImage。"""
+    """在线程中解码显示图像，只返回线程安全的 QImage。
+
+    返回 (image, image_size, is_animated)；is_animated 表示文件包含
+    多帧（GIF / 动图 WEBP 等），交给主线程用 QMovie 播放。
+    """
     try:
         reader = QImageReader(path)
         reader.setAutoTransform(True)
@@ -33,6 +37,7 @@ def _decode_display_image(path: str):
             if size.isValid()
             else None
         )
+        is_animated = reader.imageCount() > 1
         if size.isValid() and max(size.width(), size.height()) > _DISPLAY_MAX:
             reader.setScaledSize(
                 size.scaled(
@@ -43,14 +48,22 @@ def _decode_display_image(path: str):
             )
         image = reader.read()
         if image.isNull():
-            return QImage(), image_size
-        return image, image_size or (image.width(), image.height())
+            return QImage(), image_size, False
+        # 部分格式（如 GIF）不支持 setScaledSize，读出后兜底缩小
+        if max(image.width(), image.height()) > _DISPLAY_MAX:
+            image = image.scaled(
+                _DISPLAY_MAX,
+                _DISPLAY_MAX,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        return image, image_size or (image.width(), image.height()), is_animated
     except Exception:
-        return QImage(), None
+        return QImage(), None, False
 
 
 class _ImageDecodeSignals(QObject):
-    finished = pyqtSignal(int, str, object, object)
+    finished = pyqtSignal(int, str, object, object, bool)
 
 
 class _ImageDecodeTask(QRunnable):
@@ -61,9 +74,9 @@ class _ImageDecodeTask(QRunnable):
         self.signals = _ImageDecodeSignals()
 
     def run(self):
-        image, image_size = _decode_display_image(self.path)
+        image, image_size, is_animated = _decode_display_image(self.path)
         self.signals.finished.emit(
-            self.request_id, self.path, image, image_size
+            self.request_id, self.path, image, image_size, is_animated
         )
 
 
@@ -256,13 +269,16 @@ class ImagePanel(QGraphicsView):
         self._rotation = 0          # 0/90/180/270
         self._dirty = False         # 是否存在尚未保存的旋转/裁剪
         self._full_path: str | None = None  # 磁盘原图路径；裁剪/编辑后置 None
+        self._movie: QMovie | None = None   # 动图播放器（GIF / 动图 WEBP）
+        self._animated_file = False         # 当前文件是否含多帧（决定能否全尺寸重解码）
         self._decode_generation = 0
         self._pending_decode_path: str | None = None
         self._decode_tasks: dict[int, _ImageDecodeTask] = {}
 
         # ── 图片缓存（LRU，避免翻页时重复解码） ──
+        # 条目：(显示图, 文件签名, 实际尺寸, 是否动图)
         self._cache: OrderedDict[
-            str, tuple[QPixmap, tuple[int, int], tuple[int, int]]
+            str, tuple[QPixmap, tuple[int, int], tuple[int, int], bool]
         ] = OrderedDict()
         self._cache_max = 20
         self._cache_max_bytes = 256 * 1024 * 1024
@@ -442,9 +458,10 @@ class ImagePanel(QGraphicsView):
         pix: QPixmap,
         signature: tuple[int, int],
         image_size: tuple[int, int],
+        is_animated: bool = False,
     ):
         self._remove_cached(key)
-        self._cache[key] = (pix, signature, image_size)
+        self._cache[key] = (pix, signature, image_size, is_animated)
         self._cache_bytes += self._pixmap_cost(pix)
         while self._cache and (
             len(self._cache) > self._cache_max
@@ -461,9 +478,14 @@ class ImagePanel(QGraphicsView):
         if self._dirty == dirty:
             return
         self._dirty = dirty
+        if dirty:
+            # 旋转/裁剪按单帧保存管线处理，动图停止播放
+            self._stop_movie()
         self.dirtyChanged.emit(dirty)
 
     def _clear_image(self):
+        self._stop_movie()
+        self._animated_file = False
         self._source = QPixmap()
         self._image_size = None
         self._rotation = 0
@@ -481,10 +503,12 @@ class ImagePanel(QGraphicsView):
         pix: QPixmap,
         image_size: tuple[int, int],
         signature: tuple[int, int] | None,
+        is_animated: bool = False,
     ):
         key = self._cache_key(path)
         if signature is not None:
-            self._cache_pixmap(key, pix, signature, image_size)
+            self._cache_pixmap(key, pix, signature, image_size, is_animated)
+        self._animated_file = is_animated
         self._source = pix
         self._image_size = image_size
         self._rotation = 0
@@ -492,6 +516,8 @@ class ImagePanel(QGraphicsView):
         self._zoom = None
         self._full_path = path
         self._refresh()
+        if is_animated:
+            self._start_movie(path)
 
     def _load_cached(self, path: str, signature: tuple[int, int] | None) -> bool:
         key = self._cache_key(path)
@@ -501,6 +527,8 @@ class ImagePanel(QGraphicsView):
         if signature is None or entry[1] != signature:
             self._remove_cached(key)
             return False
+        self._stop_movie()
+        self._animated_file = entry[3]
         self._source = entry[0]
         self._image_size = entry[2]
         self._cache.move_to_end(key)
@@ -509,6 +537,8 @@ class ImagePanel(QGraphicsView):
         self._zoom = None
         self._full_path = path
         self._refresh()
+        if entry[3]:
+            self._start_movie(path)
         return True
 
     def load_image(self, path: str) -> bool:
@@ -525,12 +555,12 @@ class ImagePanel(QGraphicsView):
         if self._load_cached(path, signature):
             return True
 
-        image, image_size = _decode_display_image(path)
+        image, image_size, is_animated = _decode_display_image(path)
         if image.isNull() or image_size is None:
             self._clear_image()
             return False
         pix = QPixmap.fromImage(image)
-        self._apply_loaded_pixmap(path, pix, image_size, signature)
+        self._apply_loaded_pixmap(path, pix, image_size, signature, is_animated)
         return True
 
     def load_image_async(self, path: str):
@@ -565,6 +595,7 @@ class ImagePanel(QGraphicsView):
         path: str,
         image: QImage,
         image_size: tuple[int, int] | None,
+        is_animated: bool,
     ):
         self._decode_tasks.pop(request_id, None)
         if (
@@ -579,7 +610,7 @@ class ImagePanel(QGraphicsView):
             return
         pix = QPixmap.fromImage(image)
         self._apply_loaded_pixmap(
-            path, pix, image_size, self._file_signature(path)
+            path, pix, image_size, self._file_signature(path), is_animated
         )
         self.imageLoadFinished.emit(path, True)
 
@@ -596,6 +627,39 @@ class ImagePanel(QGraphicsView):
     def is_dirty(self) -> bool:
         return self._dirty
 
+    # ── 动图播放 ──
+
+    def _start_movie(self, path: str):
+        """对多帧图片（GIF / 动图 WEBP）启动逐帧播放。"""
+        self._stop_movie()
+        movie = QMovie(path, parent=self)
+        movie.setCacheMode(QMovie.CacheMode.CacheAll)
+        movie.frameChanged.connect(self._on_movie_frame)
+        self._movie = movie
+        movie.start()
+
+    def _stop_movie(self):
+        if self._movie is None:
+            return
+        self._movie.stop()
+        self._movie.deleteLater()
+        self._movie = None
+
+    def _on_movie_frame(self, _frame: int):
+        """动画帧到达：当前帧同步为编辑基准（复制/裁剪取该帧），跟随旋转显示。"""
+        if self._movie is None or self._source.isNull():
+            return
+        pix = self._movie.currentPixmap()
+        if pix.size() != self._source.size():
+            # 解码显示图可能被缩小过，把动画帧对齐到同一显示尺寸
+            pix = pix.scaled(
+                self._source.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        self._source = pix
+        self._item.setPixmap(self._get_rotated_display())
+
     # ── 缩放 ──
 
     def fit_to_window(self):
@@ -609,7 +673,8 @@ class ImagePanel(QGraphicsView):
         """100% 原始尺寸"""
         if self._source.isNull():
             return
-        if self._full_path and self._image_size:
+        # 动图的内存基准是当前帧，不能从磁盘重解码（只会拿到第 0 帧）
+        if self._full_path and self._image_size and not self._animated_file:
             source_pixels = self._source.width() * self._source.height()
             image_pixels = self._image_size[0] * self._image_size[1]
             if source_pixels < image_pixels:
@@ -672,11 +737,11 @@ class ImagePanel(QGraphicsView):
         """全分辨率图片（含旋转）。
 
         未编辑过时从磁盘全尺寸重解码，保存不丢分辨率；
-        已编辑（裁剪）过则直接用内存中的 _source。
+        已编辑（裁剪）过或动图（当前帧只存在于内存）则直接用内存中的 _source。
         """
         if self._source.isNull():
             return QPixmap()
-        if self._full_path is None:
+        if self._full_path is None or self._animated_file:
             return self._get_rotated_display()
         reader = QImageReader(self._full_path)
         reader.setAutoTransform(True)
@@ -896,8 +961,9 @@ class ImagePanel(QGraphicsView):
         if img_rect.width() < 2 or img_rect.height() < 2:
             return
 
-        # 未编辑过的图：按显示比例映射到全尺寸图，全分辨率裁剪，保住细节
-        if self._full_path is not None:
+        # 未编辑过的静态图：按显示比例映射到全尺寸图，全分辨率裁剪，保住细节
+        # （动图跳过：磁盘重解码只会得到第 0 帧，与显示的当前帧不一致）
+        if self._full_path is not None and not self._animated_file:
             reader = QImageReader(self._full_path)
             reader.setAutoTransform(True)
             img = reader.read()

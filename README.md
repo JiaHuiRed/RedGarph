@@ -3,7 +3,7 @@
 > **macOS 风格本地图片查看器。** 缩放/旋转/裁剪/EXIF 信息面板。
 > _A macOS-style local image viewer with zoom, rotate, crop, and EXIF info panel._
 
-[![版本](https://badgen.net/badge/版本/0.1.8/blue)](CHANGELOG.md)
+[![版本](https://badgen.net/badge/版本/0.1.9/blue)](CHANGELOG.md)
 [![平台](https://badgen.net/badge/平台/Windows/lightgrey)]()
 [![Tech](https://badgen.net/badge/Tech/PyQt6/orange)]()
 
@@ -12,6 +12,7 @@
 ## ✨ 功能
 
 - **缩放拖拽** — 滚轮缩放（以鼠标为中心）、拖拽平移、双击切换适应/原尺寸
+- **动图播放** — GIF / 动图 WEBP 自动逐帧播放，旋转/裁剪按当前帧处理（编辑导出为静态图）
 - **旋转** — R 顺时针、Shift+R 逆时针，每次 90°
 - **裁剪** — Ctrl+Shift+C 进入裁剪模式，拖拽选区，Enter 确认，Esc 取消
 - **保存** — Ctrl+S 覆盖保存（含旋转/裁剪）；Ctrl+Shift+S 另存为

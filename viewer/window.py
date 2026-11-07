@@ -857,7 +857,11 @@ class MainWindow(QMainWindow):
 
         fmt = self._EXT_FMT.get(self._current_path.suffix.lower(), "")
         if not fmt:
-            QMessageBox.warning(self, "保存失败", "SVG 图片不支持直接覆盖保存，请使用另存为导出")
+            ext = self._current_path.suffix.lstrip(".").upper() or "该"
+            QMessageBox.warning(
+                self, "保存失败",
+                f"{ext} 格式不支持直接覆盖保存，请使用另存为导出",
+            )
             return False
 
         if not self._save_pixmap_atomic(
